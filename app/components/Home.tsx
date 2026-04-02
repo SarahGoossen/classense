@@ -405,20 +405,20 @@ return (
     .hero-panel {
       background: linear-gradient(
         145deg,
-        rgba(226, 216, 178, 0.98) 0%,
-        rgba(241, 235, 205, 0.96) 34%,
-        rgba(218, 205, 161, 0.97) 68%,
-        rgba(235, 227, 194, 0.98) 100%
+        rgba(233, 237, 243, 0.98) 0%,
+        rgba(249, 250, 252, 0.97) 34%,
+        rgba(215, 221, 231, 0.98) 68%,
+        rgba(240, 243, 248, 0.98) 100%
       );
-      border: 1px solid rgba(160, 140, 87, 0.42);
+      border: 1px solid rgba(148, 163, 184, 0.34);
       border-radius: 24px;
       padding: 18px;
       margin-bottom: 24px;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.42),
-        inset 0 -1px 0 rgba(112, 92, 42, 0.12),
+        inset 0 1px 1px rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 rgba(148, 163, 184, 0.16),
         var(--shadow-soft);
     }
 

@@ -51,6 +51,12 @@
 
 :root {
   --brand-script-fallback: #1d4ed8;
+  --brand-script-shadow: rgba(17, 24, 39, 0.05);
+}
+
+.dark {
+  --brand-script-fallback: #e5e7eb;
+  --brand-script-shadow: rgba(255, 255, 255, 0.18);
 }
 
 /* ===== BASE RESET (THIS IS THE KEY) ===== */

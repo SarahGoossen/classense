@@ -2,17 +2,21 @@
 
 import { useEffect, useState } from "react";
 
+import AuthGate from "./components/AuthGate";
 import Home from "./components/Home";
 import Planner from "./components/Planner";
 import Logs from "./components/Logs";
 import Library from "./components/Library";
 import Settings from "./components/Settings";
 import Classes from "./components/Classes";
+import { ClassenseCloudProvider, useClassenseCloud } from "./context/ClassenseCloud";
 
-export default function Page() {
+function AppShell() {
   const [activeTab, setActiveTab] = useState("home");
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const { authReady, cloudEnabled, user } = useClassenseCloud();
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 640);
@@ -20,6 +24,39 @@ export default function Page() {
     window.addEventListener("resize", updateViewport);
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const syncTheme = () => setIsDarkMode(root.classList.contains("dark"));
+
+    syncTheme();
+
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+
+    return () => observer.disconnect();
+  }, []);
+
+  if (!authReady) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--bg)",
+          color: "var(--text)",
+          padding: 24,
+        }}
+      >
+        Loading Classense...
+      </main>
+    );
+  }
+
+  if (cloudEnabled && !user) {
+    return <AuthGate />;
+  }
 
   return (
     <main
@@ -36,22 +73,36 @@ export default function Page() {
       {activeTab === "home" && (
         <div
           style={{
-            padding: isMobile ? "12px 16px 8px" : "14px 20px 10px",
-            background: "var(--surface)",
+            padding: isMobile ? "6px 16px 0" : "8px 20px 0",
+            background: "transparent",
           }}
         >
           <div
             style={{
-              fontSize: isMobile ? 28 : 32,
+              fontSize: isMobile ? 16 : 18,
               lineHeight: 1,
-              fontWeight: 700,
-              letterSpacing: "0.01em",
-              fontFamily: '"Brush Script MT", "Snell Roundhand", "Segoe Script", cursive',
-              color: "var(--brand-script-fallback)",
-              background: "linear-gradient(135deg, #1d4ed8, #60a5fa, #1e40af)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-              textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+              fontWeight: 600,
+              letterSpacing: "0.015em",
+              fontFamily: '"Palatino Linotype", "Book Antiqua", Georgia, serif',
+              fontStyle: "italic",
+              marginLeft: isMobile ? 10 : 14,
+              color: isDarkMode ? "#f8fafc" : "#163a86",
+              background: isDarkMode
+                ? "linear-gradient(180deg, #ffffff 0%, #f8fafc 24%, #cbd5e1 54%, #ffffff 82%, #e2e8f0 100%)"
+                : undefined,
+              WebkitBackgroundClip: isDarkMode ? "text" : undefined,
+              WebkitTextFillColor: isDarkMode ? "transparent" : undefined,
+              textShadow: isDarkMode
+                ? [
+                    "0 1px 0 rgba(255,255,255,0.42)",
+                    "0 2px 2px rgba(15,23,42,0.28)",
+                    "0 8px 14px rgba(226,232,240,0.12)",
+                  ].join(", ")
+                : [
+                    "0 1px 0 rgba(255,255,255,0.26)",
+                    "0 1px 1px rgba(96,165,250,0.2)",
+                    "0 2px 3px rgba(22,58,134,0.14)",
+                  ].join(", "),
             }}
           >
             Classense
@@ -145,6 +196,14 @@ export default function Page() {
         </button>
       </nav>
     </main>
+  );
+}
+
+export default function Page() {
+  return (
+    <ClassenseCloudProvider>
+      <AppShell />
+    </ClassenseCloudProvider>
   );
 }
 

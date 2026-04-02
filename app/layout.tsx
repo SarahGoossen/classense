@@ -30,7 +30,13 @@ export default function RootLayout({
             __html: `
               try {
                 var theme = localStorage.getItem("app_theme");
-                if (theme === "dark") {
+                if (!theme) theme = "auto";
+                var hour = new Date().getHours();
+                var resolved = theme;
+                if (theme === "auto") {
+                  resolved = hour >= 7 && hour < 19 ? "light" : "dark";
+                }
+                if (resolved === "dark") {
                   document.documentElement.classList.add("dark");
                 }
               } catch (e) {}

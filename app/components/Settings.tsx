@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { applyTheme, getStoredTheme, saveTheme, type ThemeMode } from "../utils/theme";
+import { useClassenseCloud } from "../context/ClassenseCloud";
+import {
+  AUTO_DARK_START_HOUR,
+  AUTO_LIGHT_START_HOUR,
+  applyTheme,
+  getStoredTheme,
+  saveTheme,
+  type ThemeMode,
+} from "../utils/theme";
 
 type ClassItem = { name: string };
 const CLASSENSE_STORAGE_KEYS = [
@@ -34,6 +42,7 @@ export default function Settings() {
 
   const [prepTime, setPrepTime] = useState("2h");
   const [theme, setTheme] = useState<ThemeMode>("light");
+  const { cloudEnabled, user, syncStatus, signOut } = useClassenseCloud();
 
   useEffect(() => {
     const savedName = localStorage.getItem("app_name");
@@ -155,6 +164,31 @@ export default function Settings() {
         </div>
       </div>
 
+      {cloudEnabled && (
+        <div style={card}>
+          <div style={sectionKicker}>Account</div>
+          <div style={sectionTitle}>Classense Cloud</div>
+          <div style={helper}>
+            {user?.email ? `Signed in as ${user.email}.` : "No account connected."}
+          </div>
+          <div style={helper}>{syncStatus}</div>
+          {user && (
+            <button
+              onClick={() => void signOut()}
+              style={secondaryBtn}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "none";
+              }}
+            >
+              Sign Out
+            </button>
+          )}
+        </div>
+      )}
+
       {/* PROFILE */}
       <div style={card}>
         <div style={sectionKicker}>Profile</div>
@@ -194,11 +228,28 @@ export default function Settings() {
       <div style={card}>
         <div style={sectionKicker}>Appearance</div>
         <div style={sectionTitle}>Appearance</div>
-        <Toggle mobile={isMobile} label="Dark Mode" value={theme === "dark"} setValue={(value: boolean) => {
-          const nextTheme: ThemeMode = value ? "dark" : "light";
-          setTheme(nextTheme);
-          saveTheme(nextTheme);
-        }} />
+        <div style={helper}>
+          Choose manual light or dark mode, or let Classense switch automatically.
+        </div>
+
+        <select
+          value={theme}
+          onChange={(e) => {
+            const nextTheme = e.target.value as ThemeMode;
+            setTheme(nextTheme);
+            saveTheme(nextTheme);
+          }}
+          style={input}
+        >
+          <option value="auto">Automatic (7 AM light / 7 PM dark)</option>
+          <option value="light">Light Mode</option>
+          <option value="dark">Dark Mode</option>
+        </select>
+
+        <div style={helper}>
+          Default schedule: light from {AUTO_LIGHT_START_HOUR}:00 to {AUTO_DARK_START_HOUR}:00,
+          dark overnight.
+        </div>
       </div>
 
       <div style={card}>
