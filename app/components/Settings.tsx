@@ -42,7 +42,7 @@ export default function Settings() {
 
   const [prepTime, setPrepTime] = useState("2h");
   const [theme, setTheme] = useState<ThemeMode>("light");
-  const { cloudEnabled, user, syncStatus, signOut } = useClassenseCloud();
+  const { cloudEnabled, user, syncStatus, signOut, signingOut } = useClassenseCloud();
 
   useEffect(() => {
     const savedName = localStorage.getItem("app_name");
@@ -176,6 +176,7 @@ export default function Settings() {
             <button
               onClick={() => void signOut()}
               style={secondaryBtn}
+              disabled={signingOut}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-2px)";
               }}
@@ -183,7 +184,7 @@ export default function Settings() {
                 e.currentTarget.style.transform = "none";
               }}
             >
-              Sign Out
+              {signingOut ? "Signing Out..." : "Sign Out"}
             </button>
           )}
         </div>

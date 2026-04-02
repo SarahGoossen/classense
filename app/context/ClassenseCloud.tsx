@@ -34,6 +34,7 @@ type CloudContextValue = {
   cloudEnabled: boolean;
   authReady: boolean;
   user: User | null;
+  signingOut: boolean;
   authMode: AuthMode;
   setAuthMode: (mode: AuthMode) => void;
   syncStatus: string;
@@ -188,6 +189,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
   const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured());
+  const [signingOut, setSigningOut] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [syncStatus, setSyncStatus] = useState(
     isSupabaseConfigured()
@@ -292,6 +294,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!active) return;
       setUser(data.user ?? null);
+      setSigningOut(false);
       setAuthReady(true);
       await hydrateUser(data.user ?? null);
     });
@@ -300,6 +303,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setUser(session?.user ?? null);
+      setSigningOut(false);
       setAuthReady(true);
       await hydrateUser(session?.user ?? null);
     });
@@ -350,7 +354,16 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       return { error: "Supabase is not configured yet." };
     }
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const emailRedirectTo =
+      typeof window !== "undefined" ? window.location.origin : undefined;
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo,
+      },
+    });
     if (error) {
       return { error: error.message };
     }
@@ -362,6 +375,11 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     if (!supabase) return;
+    setSigningOut(true);
+    setAuthReady(true);
+    setUser(null);
+    setSyncStatus("Signing you out...");
+
     await supabase.auth.signOut();
   };
 
@@ -371,6 +389,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         cloudEnabled,
         authReady,
         user,
+        signingOut,
         authMode,
         setAuthMode,
         syncStatus,

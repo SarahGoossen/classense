@@ -16,7 +16,8 @@ function AppShell() {
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const { authReady, cloudEnabled, user } = useClassenseCloud();
+  const [signOutQuote, setSignOutQuote] = useState("");
+  const { authReady, cloudEnabled, user, signingOut } = useClassenseCloud();
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 640);
@@ -37,6 +38,20 @@ function AppShell() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!signingOut) return;
+
+    const quotes = [
+      "Have a great day. Your teaching work is safely waiting for you.",
+      "Signed out. Wishing you a calm and productive day ahead.",
+      "You are signed out. Come back anytime and Classense will be ready.",
+      "Have a great day. Your plans and notes will be here when you return.",
+    ];
+
+    const hour = new Date().getHours();
+    setSignOutQuote(quotes[hour % quotes.length]);
+  }, [signingOut]);
+
   if (!authReady) {
     return (
       <main
@@ -50,6 +65,53 @@ function AppShell() {
         }}
       >
         Loading Classense...
+      </main>
+    );
+  }
+
+  if (signingOut) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background:
+            "radial-gradient(circle at top right, rgba(59, 130, 246, 0.14), transparent 32%), linear-gradient(180deg, #f8fbff, #eef4ff)",
+          color: "#0f172a",
+          padding: 24,
+        }}
+      >
+        <div
+          style={{
+            width: "min(560px, 100%)",
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid rgba(148, 163, 184, 0.22)",
+            borderRadius: 24,
+            padding: 28,
+            boxShadow: "0 20px 60px rgba(15, 23, 42, 0.12)",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 15,
+              fontWeight: 700,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: "#2563eb",
+              marginBottom: 14,
+            }}
+          >
+            Classense
+          </div>
+          <h1 style={{ fontSize: "clamp(1.9rem, 4vw, 2.6rem)", margin: "0 0 12px" }}>
+            You are signed out.
+          </h1>
+          <p style={{ margin: 0, color: "#475569", fontSize: "1rem", lineHeight: 1.65 }}>
+            {signOutQuote}
+          </p>
+        </div>
       </main>
     );
   }
