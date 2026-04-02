@@ -33,6 +33,26 @@ export default function Page() {
         paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
       }}
     >
+      <div
+        style={{
+          padding: isMobile ? "12px 16px 8px" : "14px 20px 10px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--surface)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: isMobile ? 18 : 20,
+            fontWeight: 700,
+            letterSpacing: "-0.02em",
+            color: "var(--page-title)",
+            textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+          }}
+        >
+          Classense
+        </div>
+      </div>
+
       <div style={{ flex: 1, background: "var(--surface)" }}>
         {activeTab === "home" && (
           <Home
