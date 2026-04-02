@@ -425,12 +425,12 @@ return (
     :global(.dark) .hero-panel {
       background: linear-gradient(
         145deg,
-        rgba(95, 79, 33, 0.92) 0%,
-        rgba(79, 68, 28, 0.9) 40%,
-        rgba(68, 61, 33, 0.9) 72%,
-        rgba(90, 74, 29, 0.92) 100%
+        rgba(83, 66, 120, 0.94) 0%,
+        rgba(68, 57, 101, 0.92) 40%,
+        rgba(54, 60, 102, 0.92) 72%,
+        rgba(74, 63, 108, 0.94) 100%
       );
-      border: 1px solid rgba(217, 180, 71, 0.24);
+      border: 1px solid rgba(196, 181, 253, 0.22);
       box-shadow:
         inset 0 1px 1px rgba(255, 255, 255, 0.08),
         inset 0 -1px 0 rgba(15, 23, 42, 0.2),
