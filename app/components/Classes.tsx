@@ -6,6 +6,7 @@ const days = [
 ];
 
 export default function Classes() {
+  const [isMobile, setIsMobile] = useState(false);
   const [newClass, setNewClass] = useState("");
   const [newDay, setNewDay] = useState(1);
   const [newTime, setNewTime] = useState("19:00");
@@ -28,6 +29,13 @@ export default function Classes() {
 
     setClasses(fixed);
     localStorage.setItem("classes", JSON.stringify(fixed));
+  }, []);
+
+  useEffect(() => {
+    const updateViewport = () => setIsMobile(window.innerWidth <= 640);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
   const saveNow = (updated: any[]) => {
@@ -85,8 +93,13 @@ export default function Classes() {
   };
 
   return (
-    <div style={container}>
-      <h2 style={title}>Classes</h2>
+    <div style={{ ...container, padding: isMobile ? 16 : 20 }}>
+      <div style={header}>
+        <h2 style={title}>Classes</h2>
+        <div style={subtitle}>
+          Build your teaching schedule here first, then attach lessons to each class.
+        </div>
+      </div>
 
       {/* ADD */}
       <div style={inputCard}>
@@ -94,48 +107,59 @@ export default function Classes() {
           value={newClass}
           onChange={(e) => setNewClass(e.target.value)}
           placeholder="Add new class..."
-          style={input}
+          style={inputFull}
         />
 
-        <select
-          value={newDay}
-          onChange={(e) => setNewDay(Number(e.target.value))}
-          style={select}
-        >
-          {days.map((d, i) => (
-            <option key={i} value={i}>{d}</option>
-          ))}
-        </select>
+        <div style={{ ...inputRow, flexDirection: isMobile ? "column" : "row" }}>
+          <select
+            value={newDay}
+            onChange={(e) => setNewDay(Number(e.target.value))}
+            style={select}
+          >
+            {days.map((d, i) => (
+              <option key={i} value={i}>{d}</option>
+            ))}
+          </select>
 
-        <input
-          type="time"
-          value={newTime}
-          onChange={(e) => setNewTime(e.target.value)}
-          style={select}
-        />
+          <input
+            type="time"
+            value={newTime}
+            onChange={(e) => setNewTime(e.target.value)}
+            style={select}
+          />
 
-        <button
-          onClick={handleAdd}
-          style={btn}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
-            e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-            e.currentTarget.style.boxShadow = "none";
-          }}
-        >
-          Add
-        </button>
+          <button
+            onClick={handleAdd}
+            style={btn}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
+              e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "none";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            Add
+          </button>
+        </div>
       </div>
 
       {/* LIST */}
       <div style={{ marginTop: 20 }}>
+        {classes.length === 0 && (
+          <div style={emptyCard}>
+            <div style={className}>No classes yet</div>
+            <div style={dayLabel}>
+              Add your first class above to start organizing lessons and planning.
+            </div>
+          </div>
+        )}
+
         {classes.map((c) => (
           <div
             key={c.id}
-            style={card}
+            style={{ ...card, flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "stretch" : "center" }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-2px)";
             }}
@@ -168,7 +192,7 @@ export default function Classes() {
                   style={selectInline}
                 />
 
-                <div style={actions}>
+                <div style={{ ...actions, width: isMobile ? "100%" : "auto", justifyContent: "flex-start", flexWrap: "wrap" }}>
                   <button
                     onClick={saveEdit}
                     style={editBtn}
@@ -205,7 +229,7 @@ export default function Classes() {
                   </div>
                 </div>
 
-                <div style={actions}>
+                <div style={{ ...actions, width: isMobile ? "100%" : "auto", justifyContent: "flex-start", flexWrap: "wrap" }}>
                   <button
                     onClick={() => startEdit(c)}
                     style={editBtn}
@@ -249,61 +273,109 @@ const container = {
   margin: "0 auto",
 };
 
+const header = {
+  padding: "0 0 0 14px",
+  borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
+  boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
+  marginBottom: 20,
+};
+
 const title = {
-  fontSize: 22,
+  fontSize: 24,
   fontWeight: 600,
-  marginBottom: 15,
+  marginBottom: 0,
+  color: "var(--page-title)",
+  textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+};
+
+const subtitle = {
+  fontSize: 15,
+  lineHeight: 1.45,
+  color: "var(--page-subtitle)",
+  marginTop: 8,
+  fontWeight: 500,
 };
 
 const inputCard = {
-  display: "grid",
-  gridTemplateColumns: "1fr 140px 140px auto",
+  display: "flex",
+  flexDirection: "column",
   gap: 10,
-  background: "rgba(255,255,255,0.7)",
+  background: "var(--surface)",
   backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.6)",
+  border: "1px solid var(--border-strong)",
   padding: 12,
   borderRadius: 14,
+  boxShadow: "var(--shadow-soft)",
 };
 
 const input = {
+  width: "100%",
+  boxSizing: "border-box",
   padding: 10,
   borderRadius: 8,
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-strong)",
+  background: "var(--surface)",
+  color: "var(--text)",
+  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.04)",
+};
+
+const inputFull = {
+  ...input,
+};
+
+const inputRow = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
 };
 
 const select = {
+  flex: "1 1 140px",
+  minWidth: 0,
+  boxSizing: "border-box",
   padding: 10,
   borderRadius: 8,
-  border: "1px solid #ddd",
+  border: "1px solid var(--border-strong)",
+  background: "var(--surface)",
+  color: "var(--text)",
+  boxShadow: "inset 0 1px 1px rgba(255,255,255,0.04)",
 };
 
 const inputInline = {
   flex: 1,
   padding: 8,
   borderRadius: 6,
-  border: "1px solid #ccc",
+  border: "1px solid var(--border-strong)",
+  background: "var(--input-bg)",
+  color: "var(--text)",
 };
 
 const selectInline = {
   padding: 8,
   borderRadius: 6,
-  border: "1px solid #ccc",
+  border: "1px solid var(--border-strong)",
+  background: "var(--input-bg)",
+  color: "var(--text)",
 };
 
 const btn = {
+  flex: "0 0 auto",
+  minWidth: 88,
   padding: "10px 16px",
   borderRadius: 10,
-  background: "black",
-  color: "white",
+  background: "linear-gradient(135deg, #1e3a8a, #2563eb, #60a5fa)",
+  color: "#ffffff",
   cursor: "pointer",
   transition: "all 0.15s ease",
+  border: "none",
+  fontWeight: 700,
+  boxShadow: "0 8px 18px rgba(37, 99, 235, 0.28)",
 };
 
 const card = {
-  background: "rgba(255,255,255,0.75)",
+  background: "var(--surface-soft)",
   backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.6)",
+  border: "1px solid var(--border)",
   borderRadius: 14,
   padding: 14,
   marginBottom: 10,
@@ -312,15 +384,25 @@ const card = {
   alignItems: "center",
   gap: 10,
   transition: "all 0.2s ease",
+  boxShadow: "var(--shadow-soft)",
+  color: "var(--text)",
+};
+
+const emptyCard = {
+  ...card,
+  cursor: "default",
 };
 
 const className = {
   fontWeight: 600,
+  fontSize: 15,
+  color: "var(--text)",
 };
 
 const dayLabel = {
   fontSize: 13,
-  color: "#6b7280",
+  color: "var(--muted)",
+  lineHeight: 1.4,
 };
 
 const actions = {
@@ -329,17 +411,29 @@ const actions = {
 };
 
 const editBtn = {
-  color: "#2563eb",
-  background: "none",
-  border: "none",
+  color: "var(--text)",
+  background: "var(--ghost-bg)",
+  border: "1px solid var(--border)",
   cursor: "pointer",
   fontSize: 14,
+  fontWeight: 600,
+  borderRadius: 8,
+  padding: "8px 12px",
+  minWidth: 72,
+  minHeight: 36,
+  textAlign: "center" as const,
 };
 
 const deleteBtn = {
-  color: "#ef4444",
-  background: "none",
-  border: "none",
+  color: "var(--danger-text)",
+  background: "var(--danger-bg)",
+  border: "1px solid var(--danger-border)",
   cursor: "pointer",
   fontSize: 14,
+  fontWeight: 600,
+  borderRadius: 8,
+  padding: "8px 12px",
+  minWidth: 72,
+  minHeight: 36,
+  textAlign: "center" as const,
 };

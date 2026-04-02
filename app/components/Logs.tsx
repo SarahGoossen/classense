@@ -22,6 +22,32 @@ const formatTime = (t?: string) => {
   d.setHours(h, m);
   return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 };
+
+const formatLessonDate = (value: string) => {
+  if (!value) return "";
+
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+
+  return new Date(year, month - 1, day).toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const getStoredPrepReminder = () => {
+  const value = localStorage.getItem("prepReminder");
+  return value === null ? true : value === "true";
+};
+
+const getStoredPrepTime = () => localStorage.getItem("prepTime") || "2h";
+
+const getStoredRemindersEnabled = () => {
+  const value = localStorage.getItem("remindersEnabled");
+  return value === null ? true : value === "true";
+};
+
 export default function Logs() {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -31,6 +57,7 @@ export default function Logs() {
   const [isEditor, setIsEditor] = useState(false);
 
   const [selectedClass, setSelectedClass] = useState("");
+  const [lessonTime, setLessonTime] = useState("");
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [content, setContent] = useState("");
@@ -42,6 +69,8 @@ export default function Logs() {
   const [filterClass, setFilterClass] = useState("");
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
+  const [enablePrepReminder, setEnablePrepReminder] = useState(true);
+  const [prepReminderTime, setPrepReminderTime] = useState("2h");
 
   const today = () => new Date().toISOString().split("T")[0];
 
@@ -55,6 +84,7 @@ export default function Logs() {
     const savedLogs = localStorage.getItem("logs");
     const lastClass = localStorage.getItem("lastUsedClass");
     const openId = localStorage.getItem("openLogId");
+    const editId = localStorage.getItem("editLogId");
 
     const parsedClasses: ClassItem[] = savedClasses ? JSON.parse(savedClasses) : [];
     const parsedLogs: Log[] = savedLogs ? JSON.parse(savedLogs) : [];
@@ -71,7 +101,35 @@ export default function Logs() {
         localStorage.removeItem("openLogId");
       }
     }
+
+    if (editId) {
+      const found = parsedLogs.find((log) => log.id === Number(editId));
+      if (found) {
+        setSelectedClass(found.className);
+        setLessonTime(found.classTime || getClassTime(found.className));
+        setTitle(found.title);
+        setDate(found.date);
+        setContent(found.content);
+        setTags(found.tags || []);
+        setTagInput("");
+        setReferences(found.references || "");
+        setEditingId(found.id);
+        setSelectedLog(null);
+        setIsEditor(true);
+        setEnablePrepReminder(getStoredPrepReminder());
+        setPrepReminderTime(getStoredPrepTime());
+      }
+      localStorage.removeItem("editLogId");
+    }
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("prepReminder", enablePrepReminder.toString());
+  }, [enablePrepReminder]);
+
+  useEffect(() => {
+    localStorage.setItem("prepTime", prepReminderTime);
+  }, [prepReminderTime]);
 
   const saveLogs = (data: Log[]) => {
     setLogs(data);
@@ -86,6 +144,7 @@ export default function Logs() {
   const resetEditor = () => {
     const lastClass = localStorage.getItem("lastUsedClass") || "";
     setSelectedClass(lastClass);
+    setLessonTime(getClassTime(lastClass));
     setTitle("");
     setDate(today());
     setContent("");
@@ -93,6 +152,8 @@ export default function Logs() {
     setTagInput("");
     setReferences("");
     setEditingId(null);
+    setEnablePrepReminder(getStoredPrepReminder());
+    setPrepReminderTime(getStoredPrepTime());
   };
 
   const handleNewLesson = () => {
@@ -108,6 +169,7 @@ export default function Logs() {
 
   const handleEdit = (log: Log) => {
     setSelectedClass(log.className);
+    setLessonTime(log.classTime || getClassTime(log.className));
     setTitle(log.title);
     setDate(log.date);
     setContent(log.content);
@@ -117,6 +179,8 @@ export default function Logs() {
     setEditingId(log.id);
     setSelectedLog(null);
     setIsEditor(true);
+    setEnablePrepReminder(getStoredPrepReminder());
+    setPrepReminderTime(getStoredPrepTime());
   };
 
   const handleDelete = (id: number) => {
@@ -337,7 +401,7 @@ export default function Logs() {
     }
 
     const mergedTags = Array.from(new Set([...tags, ...aiSuggestedTags]));
-const classTime = getClassTime(selectedClass);
+const classTime = lessonTime || getClassTime(selectedClass);
     const payload: Log = {
   id: editingId ?? Date.now(),
   className: selectedClass,
@@ -357,11 +421,10 @@ const classTime = getClassTime(selectedClass);
     saveLogs(updated);
     localStorage.setItem("lastUsedClass", selectedClass);
 
-    const remindersEnabled = localStorage.getItem("remindersEnabled") === "true";
-    const prepReminder = localStorage.getItem("prepReminder") === "true";
-    const prepTime = localStorage.getItem("prepTime") || "2h";
+    const remindersEnabled = getStoredRemindersEnabled();
+    const existing = JSON.parse(localStorage.getItem("reminders") || "[]");
 
-    if (remindersEnabled && prepReminder) {
+    if (remindersEnabled && enablePrepReminder) {
       const fullDateTime = date && classTime
         ? new Date(`${date}T${classTime}:00`)
         : new Date();
@@ -373,10 +436,8 @@ const classTime = getClassTime(selectedClass);
 
       const reminderTime = calculateReminderTime(
         fullDateTime.toISOString(),
-        prepTime
+        prepReminderTime
       );
-
-      const existing = JSON.parse(localStorage.getItem("reminders") || "[]");
 
       const newReminder = {
         id: Date.now(),
@@ -394,7 +455,15 @@ const classTime = getClassTime(selectedClass);
 
       localStorage.setItem(
         "reminders",
-        JSON.stringify([newReminder, ...existing])
+        JSON.stringify([
+          newReminder,
+          ...existing.filter((reminder: any) => reminder.logId !== payload.id),
+        ])
+      );
+    } else {
+      localStorage.setItem(
+        "reminders",
+        JSON.stringify(existing.filter((reminder: any) => reminder.logId !== payload.id))
       );
     }
 
@@ -458,9 +527,9 @@ const classTime = getClassTime(selectedClass);
   const darkBtn: React.CSSProperties = {
     padding: "10px 14px",
     borderRadius: 10,
-    border: "none",
-    background: "#111827",
-    color: "#fff",
+    border: "1px solid var(--border)",
+    background: "var(--text)",
+    color: "var(--bg)",
     cursor: "pointer",
     fontWeight: 500,
   };
@@ -468,25 +537,26 @@ const classTime = getClassTime(selectedClass);
   const whiteBtn: React.CSSProperties = {
     padding: "10px 14px",
     borderRadius: 10,
-    border: "1px solid #d1d5db",
-    background: "#fff",
-    color: "#111827",
+    border: "1px solid var(--border-strong)",
+    background: "var(--surface)",
+    color: "var(--text)",
     cursor: "pointer",
     fontWeight: 500,
   };
 
   const cardStyle: React.CSSProperties = {
-    background: "rgba(255,255,255,0.85)",
+    background: "var(--surface-soft)",
     backdropFilter: "blur(6px)",
     WebkitBackdropFilter: "blur(6px)",
   
     padding: 14,
     borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.6)",
+    border: "1px solid var(--border)",
   
-    boxShadow: "0 6px 18px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)",
+    boxShadow: "var(--shadow-soft)",
   
     transition: "all 0.2s ease",
+    color: "var(--text)",
   };
 
   const inputStyle: React.CSSProperties = {
@@ -494,30 +564,181 @@ const classTime = getClassTime(selectedClass);
     boxSizing: "border-box",
     padding: "12px 14px",
     borderRadius: "12px",
-    border: "1px solid rgba(0,0,0,0.06)",
-    background: "rgba(255,255,255,0.7)",
+    border: "1px solid var(--border)",
+    background: "var(--input-bg)",
     backdropFilter: "blur(4px)",
     WebkitBackdropFilter: "blur(4px)",
     fontSize: "14px",
     fontFamily: "inherit", // ✅ THIS is the key fix
     outline: "none",
     transition: "all 0.2s ease",
+    color: "var(--text)",
   };
 
   const tagStyle: React.CSSProperties = {
     display: "inline-block",
-    background: "#e5e7eb",
+    background: "var(--ghost-bg)",
     padding: "4px 8px",
     borderRadius: 8,
     fontSize: 12,
     cursor: "pointer",
+    color: "var(--text)",
+  };
+
+  const activeTagStyle: React.CSSProperties = {
+    ...tagStyle,
+    background: "rgba(59,130,246,0.18)",
+    border: "1px solid rgba(59,130,246,0.3)",
+    color: "var(--text)",
   };
 
   const shellStyle: React.CSSProperties = {
     padding: 20,
-    background: "#f5f7fa",
+    background: "var(--bg)",
     minHeight: "100%",
-    fontFamily: "system-ui, -apple-system, sans-serif",
+    color: "var(--text)",
+    fontFamily: "inherit",
+  };
+
+  const filterPanelTitle: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: "var(--muted)",
+    marginBottom: 10,
+  };
+
+  const metaRowStyle: React.CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+    alignItems: "center",
+    fontSize: 12.5,
+    color: "var(--muted)",
+    lineHeight: 1.4,
+  };
+
+  const metaDotStyle: React.CSSProperties = {
+    opacity: 0.6,
+  };
+
+  const listEmptyStyle: React.CSSProperties = {
+    ...cardStyle,
+    cursor: "default",
+  };
+
+  const editorHeaderStyle: React.CSSProperties = {
+    paddingLeft: 14,
+    borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
+    boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
+    marginBottom: 16,
+  };
+
+  const editorMetaGrid: React.CSSProperties = {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 10,
+  };
+
+  const editorClassField: React.CSSProperties = {
+    ...inputStyle,
+    flex: "1 1 220px",
+    minWidth: 0,
+  };
+
+  const editorDateField: React.CSSProperties = {
+    ...inputStyle,
+    flex: "1 1 140px",
+    minWidth: 0,
+    appearance: "none",
+    WebkitAppearance: "none",
+    minHeight: 48,
+  };
+
+  const editorTimeField: React.CSSProperties = {
+    ...inputStyle,
+    flex: "1 1 120px",
+    minWidth: 0,
+    appearance: "none",
+    WebkitAppearance: "none",
+    minHeight: 48,
+  };
+
+  const editorSectionLabel: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: "0.06em",
+    textTransform: "uppercase",
+    color: "var(--muted)",
+    marginBottom: 8,
+  };
+
+  const reminderCardStyle: React.CSSProperties = {
+    ...cardStyle,
+    background: "linear-gradient(145deg, rgba(37,99,235,0.08), var(--ghost-bg))",
+    border: "1px solid rgba(59,130,246,0.16)",
+  };
+
+  const reminderToggleStyle: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  };
+
+  const reminderPreview = (() => {
+    if (!date || !lessonTime) return "";
+
+    const reminderAt = calculateReminderTime(
+      new Date(`${date}T${lessonTime}:00`).toISOString(),
+      prepReminderTime
+    );
+
+    if (isNaN(reminderAt.getTime())) return "";
+
+    return reminderAt.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  })();
+
+  const fieldGroupStyle: React.CSSProperties = {
+    display: "grid",
+    gap: 6,
+    flex: "1 1 140px",
+    minWidth: 0,
+  };
+
+  const fieldLabelStyle: React.CSSProperties = {
+    fontSize: 12,
+    fontWeight: 600,
+    color: "var(--muted)",
+  };
+
+  const pickerWrapStyle: React.CSSProperties = {
+    position: "relative",
+  };
+
+  const pickerIconStyle: React.CSSProperties = {
+    position: "absolute",
+    right: 12,
+    top: "50%",
+    transform: "translateY(-50%)",
+    fontSize: 14,
+    color: "var(--muted)",
+    pointerEvents: "none",
+  };
+
+  const reminderPreviewStyle: React.CSSProperties = {
+    fontSize: 13,
+    color: "var(--muted)",
+    padding: "10px 12px",
+    borderRadius: 10,
+    background: "rgba(59,130,246,0.08)",
+    border: "1px solid rgba(59,130,246,0.14)",
   };
 
   if (isEditor) {
@@ -527,49 +748,91 @@ const classTime = getClassTime(selectedClass);
         <div style={{ maxWidth: 520, margin: "0 auto", padding: "16px" }}>
           <div
             style={{
-              background: "rgba(255,255,255,0.85)",
+              background: "var(--surface-soft)",
               backdropFilter: "blur(6px)",
               WebkitBackdropFilter: "blur(6px)",
               borderRadius: "16px",
               padding: "18px",
-              border: "1px solid rgba(255,255,255,0.6)",
+              border: "1px solid var(--border)",
               boxShadow:
                 "0 10px 30px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
             }}
           >
-            <div style={{ marginBottom: 14 }}>
+            <div style={{ marginBottom: 14, display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setIsEditor(false)} style={whiteBtn}>
                 ← Back
               </button>
             </div>
+
+            <div style={editorHeaderStyle}>
+              <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>
+                {editingId !== null ? "Edit Lesson" : "New Lesson"}
+              </h1>
+            <div
+              style={{
+                fontSize: 15,
+                fontWeight: 500,
+                marginTop: 8,
+                lineHeight: 1.65,
+                maxWidth: 420,
+                color: "var(--muted)",
+              }}
+            >
+                Create. Keep track of lessons, timing, and ideas worth reusing.
+              </div>
+            </div>
   
-            <div style={{ display: "grid", gap: 12 }}>
-              <select
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">Select Class</option>
-                {classes.map((c, i) => (
-                  <option key={`${c.name}-${i}`} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-  
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                style={inputStyle}
-              />
-  
-              <input
-                type="time"
-                value={getClassTime(selectedClass)}
-                readOnly
-                style={inputStyle}
-              />
+            <div style={{ display: "grid", gap: 12, marginTop: 10 }}>
+              <div>
+                <div style={editorSectionLabel}>Lesson Details</div>
+                <div style={editorMetaGrid}>
+                  <div style={{ ...fieldGroupStyle, flex: "1.3 1 220px" }}>
+                    <label style={fieldLabelStyle}>Class</label>
+                    <select
+                      value={selectedClass}
+                      onChange={(e) => {
+                        const nextClass = e.target.value;
+                        setSelectedClass(nextClass);
+                        setLessonTime(getClassTime(nextClass));
+                      }}
+                      style={editorClassField}
+                    >
+                      <option value="">Select Class</option>
+                      {classes.map((c, i) => (
+                        <option key={`${c.name}-${i}`} value={c.name}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div style={fieldGroupStyle}>
+                    <label style={fieldLabelStyle}>Date</label>
+                    <div style={pickerWrapStyle}>
+                      <input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                        style={editorDateField}
+                      />
+                      <span style={pickerIconStyle}>📅</span>
+                    </div>
+                  </div>
+
+                  <div style={fieldGroupStyle}>
+                    <label style={fieldLabelStyle}>Time</label>
+                    <div style={pickerWrapStyle}>
+                      <input
+                        type="time"
+                        value={lessonTime}
+                        onChange={(e) => setLessonTime(e.target.value)}
+                        style={editorTimeField}
+                      />
+                      <span style={pickerIconStyle}>🕒</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
   
               <input
                 placeholder="Lesson Title"
@@ -584,8 +847,54 @@ const classTime = getClassTime(selectedClass);
                 onChange={(e) => setContent(e.target.value)}
                 style={{ ...inputStyle, minHeight: "40vh", resize: "vertical" }}
               />
+
+              <div style={reminderCardStyle}>
+                <div style={{ ...editorSectionLabel, marginBottom: 10 }}>Reminder</div>
+                <div style={reminderToggleStyle}>
+                    <div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Prep reminder</div>
+                      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
+                        Create a reminder before this lesson so prep is not missed.
+                      </div>
+                  </div>
+                  <button
+                    onClick={() => setEnablePrepReminder((current) => !current)}
+                    style={{
+                      ...whiteBtn,
+                      minWidth: 72,
+                      background: enablePrepReminder ? "rgba(59,130,246,0.18)" : "var(--surface)",
+                    }}
+                  >
+                    {enablePrepReminder ? "On" : "Off"}
+                  </button>
+                </div>
+
+                {enablePrepReminder && (
+                  <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                    <select
+                      value={prepReminderTime}
+                      onChange={(e) => setPrepReminderTime(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="30m">30 minutes before</option>
+                      <option value="1h">1 hour before</option>
+                      <option value="2h">2 hours before</option>
+                      <option value="12h">12 hours before</option>
+                      <option value="1d">1 day before</option>
+                      <option value="2d">2 days before</option>
+                      <option value="1w">1 week before</option>
+                    </select>
+
+                    {reminderPreview && (
+                      <div style={reminderPreviewStyle}>
+                        Reminder will fire around {reminderPreview}.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
   
-              <div style={{ ...cardStyle, background: "#f3f4f6" }}>
+              <div style={{ ...cardStyle, background: "var(--ghost-bg)" }}>
                 <div style={{ fontWeight: 600, marginBottom: 10 }}>AI Brain</div>
   
                 <button
@@ -611,14 +920,14 @@ const classTime = getClassTime(selectedClass);
                         <span
                           key={tag}
                           onClick={() => addTag(tag)}
-                          style={{ ...tagStyle, background: "#dbeafe" }}
+                          style={{ ...tagStyle, background: "rgba(59,130,246,0.24)", color: "#dbeafe" }}
                         >
                           + {tag}
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    <div style={{ fontSize: 13, color: "var(--muted)" }}>
                       Start typing and suggestions will show here.
                     </div>
                   )}
@@ -640,7 +949,7 @@ const classTime = getClassTime(selectedClass);
                         display: "grid",
                         gap: 4,
                         fontSize: 13,
-                        color: "#374151",
+                        color: "var(--text)",
                       }}
                     >
                       {aiTips.map((tip, i) => (
@@ -648,7 +957,7 @@ const classTime = getClassTime(selectedClass);
                       ))}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    <div style={{ fontSize: 13, color: "var(--muted)" }}>
                       Looking good so far.
                     </div>
                   )}
@@ -670,7 +979,7 @@ const classTime = getClassTime(selectedClass);
                         display: "grid",
                         gap: 4,
                         fontSize: 13,
-                        color: "#374151",
+                        color: "var(--text)",
                       }}
                     >
                       {relatedLessons.map((log) => (
@@ -680,7 +989,7 @@ const classTime = getClassTime(selectedClass);
                       ))}
                     </div>
                   ) : (
-                    <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    <div style={{ fontSize: 13, color: "var(--muted)" }}>
                       No close matches yet.
                     </div>
                   )}
@@ -756,7 +1065,7 @@ const classTime = getClassTime(selectedClass);
   
         <div style={cardStyle}>
           <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 6 }}>{selectedLog.title}</h2>
-          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 14 }}>
+          <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 14 }}>
             {selectedLog.className} • {selectedLog.date} • {selectedLog.classTime || getClassTime(selectedLog.className)}
           </div>
   
@@ -825,36 +1134,55 @@ const classTime = getClassTime(selectedClass);
     <div style={shellStyle}>
       <Toast />
   
-      <div style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 10 }}>Logs</h1>
-  
-        <button
-          onClick={handleNewLesson}
+      <div
+        style={{
+          padding: "0 0 0 14px",
+          borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
+          boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
+          marginBottom: 14,
+        }}
+      >
+        <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 0, color: "var(--page-title)", textShadow: "0 1px 0 rgba(255,255,255,0.12)" }}>Logs</h1>
+        <div
           style={{
-            width: "100%",
-            padding: "14px",
-            borderRadius: "14px",
-            border: "none",
-            background: "linear-gradient(135deg, #6366f1, #3b82f6)",
-            color: "white",
-            fontWeight: 600,
-            fontSize: "15px",
-            cursor: "pointer",
-            transition: "all 0.2s ease",
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px) scale(1.01)";
-            e.currentTarget.style.boxShadow =
-              "0 10px 24px rgba(59,130,246,0.35)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-            e.currentTarget.style.boxShadow = "none";
+            fontSize: 15,
+            fontWeight: 500,
+            marginTop: 8,
+            lineHeight: 1.45,
+            color: "var(--page-subtitle)",
           }}
         >
-          New Lesson
-        </button>
+          Where your curriculum, lessons, and ideas take shape.
+        </div>
       </div>
+  
+      <button
+        onClick={handleNewLesson}
+        style={{
+          width: "100%",
+          padding: "14px",
+          borderRadius: "14px",
+          border: "none",
+          background: "linear-gradient(135deg, #1e3a8a, #2563eb, #60a5fa)",
+          color: "white",
+          fontWeight: 600,
+          fontSize: "15px",
+          cursor: "pointer",
+          transition: "all 0.2s ease",
+          marginBottom: 16,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = "translateY(-2px) scale(1.01)";
+          e.currentTarget.style.boxShadow =
+            "0 10px 24px rgba(59,130,246,0.35)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = "none";
+          e.currentTarget.style.boxShadow = "none";
+        }}
+      >
+        New Lesson
+      </button>
   
       <div
         style={{
@@ -863,6 +1191,7 @@ const classTime = getClassTime(selectedClass);
           padding: 16,
         }}
       >
+        <div style={filterPanelTitle}>Filter Lessons</div>
         <div style={{ display: "grid", gap: 12 }}>
           <input
             placeholder="Search title, content, class, tags, links..."
@@ -874,7 +1203,7 @@ const classTime = getClassTime(selectedClass);
               e.currentTarget.style.boxShadow = "0 0 0 3px rgba(99,102,241,0.1)";
             }}
             onBlur={(e) => {
-              e.currentTarget.style.border = "1px solid rgba(0,0,0,0.06)";
+              e.currentTarget.style.border = "1px solid var(--border)";
               e.currentTarget.style.boxShadow = "none";
             }}
           />
@@ -923,6 +1252,17 @@ const classTime = getClassTime(selectedClass);
       </div>
   
       <div style={{ display: "grid", gap: 12 }}>
+        {filteredLogs.length === 0 && (
+          <div style={listEmptyStyle}>
+            <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+              No matching lessons
+            </div>
+            <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+              Try changing your filters, or create a new lesson to start building your archive.
+            </div>
+          </div>
+        )}
+
         {filteredLogs.map((log) => (
           <div
             key={log.id}
@@ -935,21 +1275,24 @@ const classTime = getClassTime(selectedClass);
               e.currentTarget.style.transform = "translateY(-4px) scale(1.01)";
               e.currentTarget.style.boxShadow =
                 "0 14px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(99,102,241,0.08)";
-              e.currentTarget.style.background = "rgba(255,255,255,0.95)";
+              e.currentTarget.style.background = "var(--surface)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "none";
-              e.currentTarget.style.boxShadow =
-                "0 6px 18px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)";
-              e.currentTarget.style.background = "rgba(255,255,255,0.85)";
+              e.currentTarget.style.boxShadow = "var(--shadow-soft)";
+              e.currentTarget.style.background = "var(--surface-soft)";
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 600, color: "#111827", marginBottom: 2 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: "var(--text)", marginBottom: 2 }}>
               {log.title}
             </div>
   
-            <div style={{ fontSize: 12.5, color: "#6b7280", lineHeight: 1.4 }}>
-              {log.className} • {new Date(log.date).toLocaleDateString()} • {formatTime(log.classTime || getClassTime(log.className))}
+            <div style={metaRowStyle}>
+              <span>{log.className}</span>
+              <span style={metaDotStyle}>•</span>
+              <span>{formatLessonDate(log.date)}</span>
+              <span style={metaDotStyle}>•</span>
+              <span>{formatTime(log.classTime || getClassTime(log.className))}</span>
             </div>
   
             {log.tags.length > 0 && (

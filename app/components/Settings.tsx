@@ -1,10 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { applyTheme, getStoredTheme, saveTheme, type ThemeMode } from "../utils/theme";
 
 type ClassItem = { name: string };
+const CLASSENSE_STORAGE_KEYS = [
+  "app_name",
+  "lastUsedClass",
+  "remindersEnabled",
+  "classReminder",
+  "prepReminder",
+  "prepTime",
+  "app_theme",
+  "classes",
+  "logs",
+  "plannerEvents",
+  "library",
+  "reminders",
+  "openLogId",
+  "editLogId",
+];
 
 export default function Settings() {
+  const importRef = useRef<HTMLInputElement | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const [name, setName] = useState("");
   const [defaultClass, setDefaultClass] = useState("");
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -14,6 +33,7 @@ export default function Settings() {
   const [prepReminder, setPrepReminder] = useState(true);
 
   const [prepTime, setPrepTime] = useState("2h");
+  const [theme, setTheme] = useState<ThemeMode>("light");
 
   useEffect(() => {
     const savedName = localStorage.getItem("app_name");
@@ -24,6 +44,7 @@ export default function Settings() {
     const savedClassReminder = localStorage.getItem("classReminder");
     const savedPrep = localStorage.getItem("prepReminder");
     const savedPrepTime = localStorage.getItem("prepTime");
+    const savedTheme = getStoredTheme();
 
     if (savedName) setName(savedName);
     if (savedClass) setDefaultClass(savedClass);
@@ -34,6 +55,15 @@ export default function Settings() {
     if (savedPrep) setPrepReminder(savedPrep === "true");
 
     if (savedPrepTime) setPrepTime(savedPrepTime);
+    setTheme(savedTheme);
+    applyTheme(savedTheme);
+  }, []);
+
+  useEffect(() => {
+    const updateViewport = () => setIsMobile(window.innerWidth <= 640);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
   const handleSave = () => {
@@ -44,6 +74,7 @@ export default function Settings() {
     localStorage.setItem("classReminder", classReminder.toString());
     localStorage.setItem("prepReminder", prepReminder.toString());
     localStorage.setItem("prepTime", prepTime);
+    saveTheme(theme);
 
     alert("Saved ✓");
   };
@@ -52,16 +83,81 @@ export default function Settings() {
     const confirmText = prompt("Type DELETE to confirm reset");
     if (confirmText !== "DELETE") return;
 
-    localStorage.clear();
+    CLASSENSE_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
     location.reload();
   };
 
+  const handleExport = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      app_name: localStorage.getItem("app_name") || "",
+      lastUsedClass: localStorage.getItem("lastUsedClass") || "",
+      remindersEnabled: localStorage.getItem("remindersEnabled") ?? "true",
+      classReminder: localStorage.getItem("classReminder") ?? "true",
+      prepReminder: localStorage.getItem("prepReminder") ?? "true",
+      prepTime: localStorage.getItem("prepTime") || "2h",
+      app_theme: localStorage.getItem("app_theme") || theme,
+      classes: JSON.parse(localStorage.getItem("classes") || "[]"),
+      logs: JSON.parse(localStorage.getItem("logs") || "[]"),
+      plannerEvents: JSON.parse(localStorage.getItem("plannerEvents") || "[]"),
+      library: JSON.parse(localStorage.getItem("library") || "[]"),
+      reminders: JSON.parse(localStorage.getItem("reminders") || "[]"),
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const stamp = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `classense-backup-${stamp}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      localStorage.setItem("app_name", data.app_name || "");
+      localStorage.setItem("lastUsedClass", data.lastUsedClass || "");
+      localStorage.setItem("remindersEnabled", String(data.remindersEnabled ?? true));
+      localStorage.setItem("classReminder", String(data.classReminder ?? true));
+      localStorage.setItem("prepReminder", String(data.prepReminder ?? true));
+      localStorage.setItem("prepTime", data.prepTime || "2h");
+      localStorage.setItem("app_theme", data.app_theme || "light");
+      localStorage.setItem("classes", JSON.stringify(data.classes || []));
+      localStorage.setItem("logs", JSON.stringify(data.logs || []));
+      localStorage.setItem("plannerEvents", JSON.stringify(data.plannerEvents || []));
+      localStorage.setItem("library", JSON.stringify(data.library || []));
+      localStorage.setItem("reminders", JSON.stringify(data.reminders || []));
+
+      alert("Backup imported ✓");
+      location.reload();
+    } catch {
+      alert("That backup file could not be imported.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   return (
-    <div style={container}>
-      <h2 style={title}>Settings</h2>
+    <div style={{ ...container, padding: isMobile ? 16 : 20 }}>
+      <div style={header}>
+        <h2 style={title}>Settings</h2>
+        <div style={subtitle}>
+          Adjust appearance, reminders, defaults, and app preferences in one place.
+        </div>
+      </div>
 
       {/* PROFILE */}
       <div style={card}>
+        <div style={sectionKicker}>Profile</div>
         <div style={sectionTitle}>Profile</div>
         <input
           placeholder="Your Name / Studio"
@@ -73,6 +169,7 @@ export default function Settings() {
 
       {/* DEFAULT CLASS */}
       <div style={card}>
+        <div style={sectionKicker}>Defaults</div>
         <div style={sectionTitle}>Default Class</div>
 
         <select
@@ -95,16 +192,34 @@ export default function Settings() {
 
       {/* REMINDERS */}
       <div style={card}>
-        <div style={sectionTitle}>Reminders</div>
+        <div style={sectionKicker}>Appearance</div>
+        <div style={sectionTitle}>Appearance</div>
+        <Toggle mobile={isMobile} label="Dark Mode" value={theme === "dark"} setValue={(value: boolean) => {
+          const nextTheme: ThemeMode = value ? "dark" : "light";
+          setTheme(nextTheme);
+          saveTheme(nextTheme);
+        }} />
+      </div>
 
-        <Toggle label="Enable Reminders" value={remindersEnabled} setValue={setRemindersEnabled} />
-        <Toggle label="Class Reminder" value={classReminder} setValue={setClassReminder} />
-        <Toggle label="Lesson Prep Reminder" value={prepReminder} setValue={setPrepReminder} />
+      <div style={card}>
+        <div style={sectionKicker}>Reminders</div>
+        <div style={sectionTitle}>Reminders</div>
+        <div style={helper}>
+          Control whether lesson and class reminders are created by default.
+        </div>
+
+        <Toggle mobile={isMobile} label="Enable Reminders" value={remindersEnabled} setValue={setRemindersEnabled} />
+        <Toggle mobile={isMobile} label="Class Reminder" value={classReminder} setValue={setClassReminder} />
+        <Toggle mobile={isMobile} label="Lesson Prep Reminder" value={prepReminder} setValue={setPrepReminder} />
       </div>
 
       {/* TIMING */}
       <div style={card}>
+        <div style={sectionKicker}>Timing</div>
         <div style={sectionTitle}>Prep Reminder Timing</div>
+        <div style={helper}>
+          Choose how far in advance you want prep reminders to fire.
+        </div>
 
         <select
           value={prepTime}
@@ -122,6 +237,7 @@ export default function Settings() {
 
       {/* NOTIFICATIONS */}
       <div style={card}>
+        <div style={sectionKicker}>Notifications</div>
         <div style={sectionTitle}>Notifications</div>
 
         <div style={helper}>
@@ -146,7 +262,50 @@ export default function Settings() {
 
       {/* DATA */}
       <div style={card}>
+        <div style={sectionKicker}>Data</div>
         <div style={sectionTitle}>Data</div>
+        <div style={helper}>
+          Resetting clears your saved classes, logs, library, planner items, and reminders.
+        </div>
+
+        <button
+          onClick={handleExport}
+          style={secondaryBtn}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "none";
+          }}
+        >
+          Export Backup
+        </button>
+
+        <button
+          onClick={() => importRef.current?.click()}
+          style={secondaryBtn}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "none";
+          }}
+        >
+          Import Backup
+        </button>
+
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json"
+          onChange={handleImport}
+          style={{ display: "none" }}
+        />
+
+        <div style={helper}>
+          Export saves your app data as a backup file. Import restores that backup later if
+          you switch devices, clear browser data, or reset the app.
+        </div>
 
         <button
           onClick={handleClear}
@@ -182,12 +341,12 @@ export default function Settings() {
 }
 
 /* TOGGLE */
-function Toggle({ label, value, setValue }) {
+function Toggle({ label, value, setValue, mobile = false }) {
   return (
-    <div style={toggleRow}>
+    <div style={{ ...toggleRow, flexDirection: mobile ? "column" : "row", alignItems: mobile ? "stretch" : "center" }}>
       <span>{label}</span>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: mobile ? "space-between" : "flex-start", gap: 8 }}>
         <span style={toggleLabel}>{value ? "ON" : "OFF"}</span>
 
         <button
@@ -217,40 +376,72 @@ const container = {
   margin: "0 auto",
 };
 
+const header = {
+  padding: "0 0 0 14px",
+  borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
+  boxShadow: "inset 1px 0 0 rgba(255,255,255,0.2)",
+  marginBottom: 16,
+};
+
 const title = {
   fontSize: 22,
   fontWeight: 600,
-  marginBottom: 14,
+  marginBottom: 0,
+  color: "var(--page-title)",
+  textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+};
+
+const subtitle = {
+  fontSize: 15,
+  lineHeight: 1.45,
+  color: "var(--page-subtitle)",
+  marginTop: 8,
+  fontWeight: 500,
 };
 
 const card = {
-  background: "rgba(255,255,255,0.75)",
+  background: "var(--surface-soft)",
   backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.6)",
+  border: "1px solid var(--border)",
   borderRadius: 14,
   padding: 16,
   marginBottom: 12,
   display: "flex",
   flexDirection: "column",
   gap: 10,
+  boxShadow: "var(--shadow-soft)",
+  color: "var(--text)",
+};
+
+const sectionKicker = {
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "var(--muted)",
+  marginBottom: -2,
 };
 
 const sectionTitle = {
   fontSize: 16,
   fontWeight: 600,
+  color: "var(--text)",
 };
 
 const input = {
   width: "100%",
   padding: 12,
   borderRadius: 10,
-  border: "1px solid rgba(0,0,0,0.08)",
+  border: "1px solid var(--border)",
   boxSizing: "border-box",
+  background: "var(--input-bg)",
+  color: "var(--text)",
 };
 
 const helper = {
-  fontSize: 12,
-  color: "#6b7280",
+  fontSize: 13,
+  lineHeight: 1.45,
+  color: "var(--muted)",
 };
 
 const primaryBtn = {
@@ -268,32 +459,40 @@ const secondaryBtn = {
   width: "100%",
   padding: 12,
   borderRadius: 10,
-  background: "#f3f4f6",
-  border: "1px solid #e5e7eb",
+  background: "var(--ghost-bg)",
+  border: "1px solid var(--border)",
   cursor: "pointer",
   transition: "all 0.2s ease",
+  color: "var(--text)",
 };
 
 const dangerBtn = {
   width: "100%",
-  padding: 12,
-  borderRadius: 10,
-  background: "#fee2e2",
-  color: "#b91c1c",
-  border: "1px solid #fecaca",
+  padding: 14,
+  borderRadius: 12,
+  background:
+    "linear-gradient(135deg, #7f1d1d, #b91c1c, #ef4444, #b91c1c, #7f1d1d)",
+  backgroundSize: "200% 200%",
+  color: "#fff5f5",
+  border: "1px solid rgba(248, 113, 113, 0.38)",
   cursor: "pointer",
   transition: "all 0.2s ease",
+  fontWeight: 700,
+  boxShadow:
+    "inset 0 1px 2px rgba(255,255,255,0.22), 0 10px 24px rgba(127,29,29,0.26)",
 };
 
 const toggleRow = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
+  gap: 12,
 };
 
 const toggleLabel = {
   fontSize: 12,
   fontWeight: 600,
+  color: "var(--text)",
 };
 
 const toggleTrack = {
@@ -304,12 +503,13 @@ const toggleTrack = {
   display: "flex",
   alignItems: "center",
   transition: "all 0.2s ease",
+  border: "none",
 };
 
 const toggleThumb = {
   width: 20,
   height: 20,
-  background: "#fff",
+  background: "var(--surface)",
   borderRadius: "50%",
   transition: "all 0.2s ease",
 };

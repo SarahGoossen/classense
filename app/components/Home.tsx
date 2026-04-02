@@ -39,19 +39,42 @@ type ClassItem = {
   day?: string;
   time?: string;
 };
+type ReminderItem = {
+  id: number;
+  title: string;
+  className: string;
+  remindAt: string;
+};
+
+const formatReminderDate = (value?: string) => {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (isNaN(date.getTime())) return "";
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 
 export default function Home({ setTab }: any) {
   const userName = getUserName();
   const [logs, setLogs] = useState<Log[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [reminders, setReminders] = useState<ReminderItem[]>([]);
 
   // 🔥 CENTRALIZED LOADER
   const loadData = () => {
     const savedLogs = localStorage.getItem("logs");
     const savedClasses = localStorage.getItem("classes");
+    const savedReminders = localStorage.getItem("reminders");
 
     setLogs(savedLogs ? JSON.parse(savedLogs) : []);
     setClasses(savedClasses ? JSON.parse(savedClasses) : []);
+    setReminders(savedReminders ? JSON.parse(savedReminders) : []);
   };
 
   useEffect(() => {
@@ -148,6 +171,13 @@ const recentLogs = [...logs]
 .sort((a, b) => (a.date < b.date ? 1 : -1))
 .slice(0, 5);
 
+const upcomingReminders = [...reminders]
+.filter((reminder) => reminder.remindAt && new Date(reminder.remindAt).getTime() >= Date.now())
+.sort((a, b) => (a.remindAt > b.remindAt ? 1 : -1))
+.slice(0, 2);
+
+const nextReminder = upcomingReminders[0];
+
 const thisWeekCount = logs.length;
 
 return (
@@ -155,61 +185,102 @@ return (
   <div className="bg-glow" />
 
   <div className="content">
-    <div className="header">
-      <div className="title">Dashboard</div>
+    <div className="hero-panel">
+      <div className="header">
+        <div className="title">Dashboard</div>
 
-      <div
+        <div
         style={{
-          fontSize: 20,
-          fontWeight: 700,
+          fontSize: 17,
+          fontWeight: 600,
           marginTop: 8,
-          marginBottom: 6,
-          lineHeight: 1.3,
-          background: "linear-gradient(135deg,#1e3a8a,#2563eb,#60a5fa)",
-          WebkitBackgroundClip: "text",
-          WebkitTextFillColor: "transparent",
+          marginBottom: 8,
+          lineHeight: 1.35,
+          color: "var(--text)",
         }}
       >
-        {userName
-          ? `Welcome back, ${userName}. Your teaching command center is ready.`
-          : "Welcome. Your teaching command center is ready."}
+          {userName
+            ? `Welcome back, ${userName}. Your teaching command center is ready.`
+            : "Welcome. Your teaching command center is ready."}
+        </div>
+
+        <div className="subtitle">Stay on top of your lessons</div>
       </div>
 
-      <div className="subtitle">Stay on top of your lessons</div>
-    </div>
+      <div className="actions">
+        <button onClick={() => setTab("classes")} className="lux-btn action-card">
+          <span className="action-kicker">Step 1</span>
+          <span className="action-title">Add Class</span>
+          <span className="action-copy">
+            Start by creating your classes so lessons can be linked correctly.
+          </span>
+        </button>
 
-    <div className="actions">
-      <button onClick={() => setTab("logs")} className="lux-btn">
-        + Lesson
-      </button>
-
-      <button onClick={() => setTab("classes")} className="lux-btn">
-        + Class
-      </button>
-    </div>
-
-    <div className="stats">
-      <div className="stat">
-        <div>{logs.length}</div>
-        <span>Logs</span>
+        <button onClick={() => setTab("logs")} className="lux-btn action-card">
+          <span className="action-kicker">Step 2</span>
+          <span className="action-title">Add Lesson</span>
+          <span className="action-copy">
+            Save lesson plans and teaching notes after your classes are set up.
+          </span>
+        </button>
       </div>
 
-      <div className="stat">
-        <div>{classes.length}</div>
-        <span>Classes</span>
-      </div>
+      <div className="stats">
+        <button className="stat stat-clickable" onClick={() => setTab("logs")}>
+          <div>{logs.length}</div>
+          <span>Logs</span>
+          <small>Open lessons</small>
+        </button>
 
-      <div className="stat">
-        <div>{thisWeekCount}</div>
-        <span>Week</span>
+        <button className="stat stat-clickable" onClick={() => setTab("classes")}>
+          <div>{classes.length}</div>
+          <span>Classes</span>
+          <small>Manage classes</small>
+        </button>
+
+        <div className="stat">
+          <div>{thisWeekCount}</div>
+          <span>Week</span>
+          <small>Lessons saved</small>
+        </div>
+
+        {upcomingReminders.length === 0 && (
+          <button
+            className="stat stat-clickable hero-reminder-card"
+            onClick={() => setTab("planner")}
+          >
+            <div>0</div>
+            <span>Upcoming Reminders</span>
+            <small>Save a lesson with reminders on and it will appear here.</small>
+          </button>
+        )}
+
+        {nextReminder && (
+          <button
+            className="stat stat-clickable hero-reminder-card"
+            onClick={() => setTab("planner")}
+          >
+            <div>{upcomingReminders.length}</div>
+            <span>Upcoming Reminders</span>
+            <small>{nextReminder.title} • {formatReminderDate(nextReminder.remindAt)}</small>
+          </button>
+        )}
       </div>
     </div>
 
     <div>
-      <div className="section-title">Prep Needed</div>
+      <div className="section-head">
+        <div className="section-title">Prep Needed</div>
+        <div className="section-copy">
+          Classes without a saved lesson will show up here.
+        </div>
+      </div>
 
       {upcomingPrep.length === 0 && (
-        <div className="card">All classes prepared 🎉</div>
+        <div className="card empty-card">
+          <div className="card-title">All classes prepared</div>
+          <small>No prep gaps right now. New classes will appear here until a lesson is saved.</small>
+        </div>
       )}
 
       {upcomingPrep.map((c, i) => (
@@ -218,11 +289,10 @@ return (
           className="card prep"
           onClick={() => {
             localStorage.setItem("lastUsedClass", c.name);
-            localStorage.setItem("forcedDate", "");
             setTab("logs");
           }}
         >
-          <div>⚠️ {c.name}</div>
+          <div className="card-title">⚠️ {c.name}</div>
           <small>
             {typeof c.day === "number" ? dayNames[c.day] : c.day} •{" "}
             {formatTime(c.displayTime)}
@@ -232,7 +302,19 @@ return (
     </div>
 
     <div>
-      <div className="section-title">Recent Lessons</div>
+      <div className="section-head">
+        <div className="section-title">Recent Lessons</div>
+        <div className="section-copy">
+          Your latest lesson plans and teaching notes live here.
+        </div>
+      </div>
+
+      {recentLogs.length === 0 && (
+        <div className="card empty-card">
+          <div className="card-title">No lessons yet</div>
+          <small>Create your first lesson after adding a class to start building your library.</small>
+        </div>
+      )}
 
       {recentLogs.map((log) => (
         <div
@@ -267,8 +349,10 @@ return (
       position: relative;
       min-height: 100%;
       padding: 20px;
-      background: #f4f6fb;
+      background: var(--bg);
+      color: var(--text);
       overflow: hidden;
+      transition: background 0.25s ease, color 0.25s ease;
     }
 
     .bg-glow {
@@ -303,31 +387,74 @@ return (
     .title {
       font-size: 24px;
       font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0;
     }
 
     .subtitle {
-      font-size: 13px;
-      color: #666;
+      font-size: 14px;
+      color: rgba(15, 23, 42, 0.74);
+      margin-top: 2px;
+      line-height: 1.45;
     }
 
     .header {
-      margin-bottom: 20px;
+      margin-bottom: 18px;
+    }
+
+    .hero-panel {
+      background: linear-gradient(
+        145deg,
+        rgba(212, 191, 246, 0.99) 0%,
+        rgba(232, 216, 251, 0.97) 34%,
+        rgba(201, 184, 241, 0.98) 68%,
+        rgba(226, 210, 248, 0.99) 100%
+      );
+      border: 1px solid rgba(156, 124, 219, 0.62);
+      border-radius: 24px;
+      padding: 18px;
+      margin-bottom: 24px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.42),
+        inset 0 -1px 0 rgba(109, 65, 184, 0.16),
+        var(--shadow-soft);
+    }
+
+    :global(.dark) .hero-panel {
+      background: linear-gradient(
+        145deg,
+        rgba(83, 66, 120, 0.94) 0%,
+        rgba(68, 57, 101, 0.92) 40%,
+        rgba(54, 60, 102, 0.92) 72%,
+        rgba(74, 63, 108, 0.94) 100%
+      );
+      border: 1px solid rgba(196, 181, 253, 0.22);
+      box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.08),
+        inset 0 -1px 0 rgba(15, 23, 42, 0.2),
+        var(--shadow-soft);
+    }
+
+    :global(.dark) .subtitle {
+      color: rgba(226, 232, 240, 0.82);
     }
 
     .actions {
       display: flex;
       gap: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
     .lux-btn {
       flex: 1;
-      padding: 20px;
+      padding: 14px 16px;
       border-radius: 16px;
       border: none;
       color: white;
       font-weight: 600;
-      font-size: 16px;
+      font-size: 15px;
       cursor: pointer;
       background: linear-gradient(
         135deg,
@@ -343,6 +470,38 @@ return (
       transition: all 0.25s ease;
     }
 
+    .action-card {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: flex-start;
+      gap: 6px;
+      min-height: 108px;
+      text-align: left;
+    }
+
+    .action-kicker {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.72);
+    }
+
+    .action-title {
+      font-size: 18px;
+      line-height: 1.15;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .action-copy {
+      font-size: 12px;
+      line-height: 1.4;
+      color: rgba(255, 255, 255, 0.8);
+      max-width: 24ch;
+    }
+
     .lux-btn:hover {
       transform: translateY(-3px);
       background-position: 100% 50%;
@@ -351,27 +510,83 @@ return (
     .stats {
       display: flex;
       gap: 12px;
-      margin-bottom: 22px;
+      margin-bottom: 16px;
     }
 
     .stat {
       flex: 1;
-      padding: 10px;
-      border-radius: 10px;
-      text-align: center;
+      padding: 12px;
+      border-radius: 14px;
+      text-align: left;
+      min-height: 84px;
+      display: flex;
+      flex-direction: column;
       color: white;
-      background: linear-gradient(135deg, #6b1f2a, #b91c1c, #7f1d1d);
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.2),
-        0 6px 14px rgba(0, 0, 0, 0.15);
+      background: linear-gradient(135deg, #27483b, #335a4c, #456e5f);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18),
+        0 6px 14px rgba(21, 45, 36, 0.2);
+      border: none;
+    }
+
+    .stat div {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat span {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .stat small {
+      display: block;
+      margin-top: 3px;
+      color: rgba(255, 255, 255, 0.75);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .stat-clickable {
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .stat-clickable:hover {
+      transform: translateY(-2px);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18),
+        0 10px 20px rgba(21, 45, 36, 0.24);
+    }
+
+    .hero-reminder-card {
+      margin-bottom: 0;
+    }
+
+    .section-head {
+      margin-bottom: 10px;
     }
 
     .section-title {
       font-weight: 500;
-      margin-bottom: 10px;
+      margin-bottom: 2px;
+      color: var(--text);
+    }
+
+    .section-copy {
+      font-size: 12px;
+      line-height: 1.45;
+      color: var(--muted);
+    }
+
+    small {
+      color: var(--muted);
     }
 
     .card {
-      background: rgba(255, 255, 255, 0.85);
+      background: var(--surface-soft);
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
 
@@ -379,39 +594,61 @@ return (
       padding: 14px 16px;
       margin-bottom: 12px;
 
-      border: 1px solid rgba(255, 255, 255, 0.6);
+      border: 1px solid var(--border);
 
-      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06),
-        0 1px 2px rgba(0, 0, 0, 0.04);
+      box-shadow: var(--shadow-soft);
 
       transition: all 0.2s ease;
+      cursor: pointer;
     }
 
     .card-title {
       font-size: 15px;
       font-weight: 600;
-      color: #111827;
+      color: var(--text);
       margin-bottom: 2px;
       letter-spacing: -0.2px;
     }
 
     .card-sub {
       font-size: 12.5px;
-      color: #6b7280;
+      color: var(--muted);
       line-height: 1.4;
     }
 
     .card:hover {
       transform: translateY(-4px) scale(1.01);
-
-      box-shadow: 0 14px 32px rgba(0, 0, 0, 0.12),
-        0 0 0 1px rgba(99, 102, 241, 0.08);
-
-      background: rgba(255, 255, 255, 0.95);
+      box-shadow: var(--shadow-strong);
+      background: var(--surface);
     }
 
     .prep {
       border-left: 4px solid #f59e0b;
+    }
+
+    .empty-card {
+      cursor: default;
+    }
+
+    .empty-card:hover {
+      transform: none;
+      box-shadow: var(--shadow-soft);
+      background: var(--surface-soft);
+    }
+
+    @media (max-width: 640px) {
+      .actions,
+      .stats {
+        flex-direction: column;
+      }
+
+      .action-card {
+        min-height: auto;
+      }
+
+      .hero-panel {
+        padding: 16px;
+      }
     }
   `}</style>
 </div>

@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 
 export default function Library() {
+  const [isMobile, setIsMobile] = useState(false);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [link, setLink] = useState("");
@@ -16,6 +17,13 @@ export default function Library() {
     const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
     setItems(saved);
     setClasses(savedClasses);
+  }, []);
+
+  useEffect(() => {
+    const updateViewport = () => setIsMobile(window.innerWidth <= 640);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
   const formatLink = (url: string) => {
@@ -89,11 +97,17 @@ export default function Library() {
   }, [items, search]);
 
   return (
-    <div style={container}>
-      <h2 style={titleStyle}>Library</h2>
+    <div style={{ ...container, padding: isMobile ? 16 : 20 }}>
+      <div style={header}>
+        <h2 style={titleStyle}>Library</h2>
+        <div style={subtitle}>
+          Keep your links, notes, and teaching references organized in one place.
+        </div>
+      </div>
 
       {/* FORM */}
       <div style={card}>
+        <div style={sectionLabel}>Save Resource</div>
         <input
           placeholder="Title"
           value={title}
@@ -106,9 +120,9 @@ export default function Library() {
           onChange={(e) => setSelectedClass(e.target.value)}
           style={input}
         >
-          <option value="">Select class</option>
+          <option value="">No linked class</option>
           {classes.map((c) => (
-            <option key={c.id} value={c.name}>
+            <option key={c.id || c.name} value={c.name}>
               {c.name}
             </option>
           ))}
@@ -133,11 +147,11 @@ export default function Library() {
           style={btn}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
-            e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.25)";
+            e.currentTarget.style.boxShadow = "0 10px 24px rgba(37,99,235,0.35)";
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "none";
-            e.currentTarget.style.boxShadow = "none";
+            e.currentTarget.style.boxShadow = "var(--shadow-soft)";
           }}
         >
           {editingId !== null ? "Update" : "Save Resource"}
@@ -145,29 +159,49 @@ export default function Library() {
       </div>
 
       {/* SEARCH */}
-      <input
-        placeholder="Search title, notes, class, link..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ ...input, marginTop: 15 }}
-      />
+      <div style={searchWrap}>
+        <div style={sectionLabel}>Search</div>
+        <input
+          placeholder="Search title, notes, class, or link..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={input}
+        />
+      </div>
 
       {/* LIST */}
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 18 }}>
+        <div style={listHeader}>
+          <div style={listTitle}>Saved Resources</div>
+          <div style={listHint}>Your lesson links, notes, and reusable references.</div>
+        </div>
+
+        {filteredItems.length === 0 && (
+          <div style={emptyState}>
+            <div style={emptyTitle}>No resources yet</div>
+            <div style={emptyCopy}>
+              Save a link, note, or teaching reference above and it will appear here.
+            </div>
+          </div>
+        )}
+
         {filteredItems.map((i) => (
           <div
             key={i.id}
             style={itemCard}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 14px 28px rgba(15,23,42,0.14)";
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.transform = "none";
+              e.currentTarget.style.boxShadow = "var(--shadow-soft)";
             }}
           >
-            <div style={{ fontWeight: 600 }}>{i.title}</div>
-
-            {i.className && <div style={tag}>{i.className}</div>}
+            <div style={{ ...itemTop, flexDirection: isMobile ? "column" : "row" }}>
+              <div style={itemTitle}>{i.title}</div>
+              {i.className && <div style={tag}>{i.className}</div>}
+            </div>
 
             {i.link && (
               <a
@@ -182,7 +216,7 @@ export default function Library() {
 
             {i.notes && <div style={notesStyle}>{i.notes}</div>}
 
-            <div style={actions}>
+            <div style={{ ...actions, flexWrap: "wrap" }}>
               <button
                 onClick={() => handleEdit(i)}
                 style={editBtn}
@@ -224,21 +258,41 @@ const container = {
   margin: "0 auto",
 };
 
+const header = {
+  padding: "0 0 0 14px",
+  borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
+  boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
+  marginBottom: 16,
+};
+
 const titleStyle = {
   fontSize: 22,
   fontWeight: 600,
-  marginBottom: 15,
+  marginBottom: 0,
+  color: "var(--page-title)",
+  textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+};
+
+const subtitle = {
+  fontSize: 15,
+  lineHeight: 1.45,
+  color: "var(--page-subtitle)",
+  marginTop: 8,
+  fontWeight: 500,
 };
 
 const card = {
-  background: "rgba(255,255,255,0.75)",
+  background: "var(--surface-soft)",
   backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.6)",
+  border: "1px solid var(--border)",
   padding: 16,
   borderRadius: 14,
   display: "flex",
   flexDirection: "column",
   gap: 12,
+  boxShadow: "var(--shadow-soft)",
+  color: "var(--text)",
+  marginBottom: 12,
 };
 
 const input = {
@@ -246,9 +300,40 @@ const input = {
   boxSizing: "border-box",
   padding: 12,
   borderRadius: 10,
-  border: "1px solid rgba(0,0,0,0.08)",
-  background: "rgba(255,255,255,0.7)",
+  border: "1px solid var(--border)",
+  background: "var(--input-bg)",
+  color: "var(--text)",
   fontFamily: "inherit",
+};
+
+const sectionLabel = {
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+  color: "var(--muted)",
+  marginBottom: 2,
+};
+
+const searchWrap = {
+  marginTop: 6,
+};
+
+const listHeader = {
+  marginBottom: 10,
+};
+
+const listTitle = {
+  fontSize: 16,
+  fontWeight: 600,
+  color: "var(--text)",
+};
+
+const listHint = {
+  marginTop: 4,
+  fontSize: 13,
+  lineHeight: 1.45,
+  color: "var(--muted)",
 };
 
 const textarea = {
@@ -265,25 +350,61 @@ const btn = {
   cursor: "pointer",
   border: "none",
   transition: "all 0.2s ease",
+  fontWeight: 600,
+  boxShadow: "var(--shadow-soft)",
 };
 
 const itemCard = {
-  background: "rgba(255,255,255,0.75)",
+  background: "var(--surface-soft)",
   backdropFilter: "blur(6px)",
-  border: "1px solid rgba(255,255,255,0.6)",
+  border: "1px solid var(--border)",
   borderRadius: 14,
   padding: 14,
   marginBottom: 12,
   transition: "all 0.2s ease",
+  boxShadow: "var(--shadow-soft)",
+  color: "var(--text)",
+};
+
+const emptyState = {
+  ...itemCard,
+  cursor: "default",
+};
+
+const emptyTitle = {
+  fontSize: 15,
+  fontWeight: 600,
+  marginBottom: 4,
+  color: "var(--text)",
+};
+
+const emptyCopy = {
+  fontSize: 13,
+  lineHeight: 1.5,
+  color: "var(--muted)",
+};
+
+const itemTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 10,
+};
+
+const itemTitle = {
+  fontSize: 15,
+  fontWeight: 600,
+  color: "var(--text)",
 };
 
 const tag = {
   display: "inline-block",
-  background: "#e5e7eb",
+  background: "var(--ghost-bg)",
   padding: "4px 8px",
   borderRadius: 6,
   fontSize: 12,
-  marginTop: 5,
+  whiteSpace: "nowrap",
+  color: "var(--text)",
 };
 
 const linkStyle = {
@@ -291,12 +412,14 @@ const linkStyle = {
   marginTop: 6,
   color: "#2563eb",
   textDecoration: "underline",
+  fontWeight: 500,
 };
 
 const notesStyle = {
   marginTop: 6,
   fontSize: 14,
-  color: "#4b5563",
+  lineHeight: 1.5,
+  color: "var(--muted)",
 };
 
 const actions = {
@@ -306,15 +429,23 @@ const actions = {
 };
 
 const editBtn = {
-  color: "#2563eb",
-  background: "none",
-  border: "none",
+  minWidth: 72,
+  minHeight: 36,
+  color: "var(--text)",
+  background: "var(--surface)",
+  border: "1px solid var(--border-strong)",
+  borderRadius: 10,
   cursor: "pointer",
+  fontWeight: 500,
 };
 
 const deleteBtn = {
+  minWidth: 72,
+  minHeight: 36,
   color: "#ef4444",
-  background: "none",
-  border: "none",
+  background: "rgba(239,68,68,0.12)",
+  border: "1px solid rgba(239,68,68,0.25)",
+  borderRadius: 10,
   cursor: "pointer",
+  fontWeight: 500,
 };
