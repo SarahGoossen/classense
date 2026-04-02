@@ -46,6 +46,11 @@
   --hero-gradient: linear-gradient(135deg, #bfdbfe, #93c5fd, #dbeafe);
   --page-title: #facc15;
   --page-subtitle: #c4b5fd;
+  --brand-script-fallback: #e5efff;
+}
+
+:root {
+  --brand-script-fallback: #1d4ed8;
 }
 
 /* ===== BASE RESET (THIS IS THE KEY) ===== */

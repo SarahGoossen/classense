@@ -33,25 +33,31 @@ export default function Page() {
         paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
       }}
     >
-      <div
-        style={{
-          padding: isMobile ? "12px 16px 8px" : "14px 20px 10px",
-          borderBottom: "1px solid var(--border)",
-          background: "var(--surface)",
-        }}
-      >
+      {activeTab === "home" && (
         <div
           style={{
-            fontSize: isMobile ? 18 : 20,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            color: "var(--page-title)",
-            textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+            padding: isMobile ? "12px 16px 8px" : "14px 20px 10px",
+            background: "var(--surface)",
           }}
         >
-          Classense
+          <div
+            style={{
+              fontSize: isMobile ? 28 : 32,
+              lineHeight: 1,
+              fontWeight: 700,
+              letterSpacing: "0.01em",
+              fontFamily: '"Brush Script MT", "Snell Roundhand", "Segoe Script", cursive',
+              color: "var(--brand-script-fallback)",
+              background: "linear-gradient(135deg, #1d4ed8, #60a5fa, #1e40af)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+            }}
+          >
+            Classense
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ flex: 1, background: "var(--surface)" }}>
         {activeTab === "home" && (
