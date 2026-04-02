@@ -405,12 +405,12 @@ return (
     .hero-panel {
       background: linear-gradient(
         145deg,
-        rgba(212, 191, 246, 0.99) 0%,
-        rgba(232, 216, 251, 0.97) 34%,
-        rgba(201, 184, 241, 0.98) 68%,
-        rgba(226, 210, 248, 0.99) 100%
+        rgba(232, 214, 151, 0.98) 0%,
+        rgba(244, 231, 182, 0.96) 34%,
+        rgba(224, 204, 137, 0.97) 68%,
+        rgba(239, 225, 173, 0.98) 100%
       );
-      border: 1px solid rgba(156, 124, 219, 0.62);
+      border: 1px solid rgba(178, 145, 61, 0.5);
       border-radius: 24px;
       padding: 18px;
       margin-bottom: 24px;
@@ -418,19 +418,19 @@ return (
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
         inset 0 1px 1px rgba(255, 255, 255, 0.42),
-        inset 0 -1px 0 rgba(109, 65, 184, 0.16),
+        inset 0 -1px 0 rgba(120, 90, 16, 0.14),
         var(--shadow-soft);
     }
 
     :global(.dark) .hero-panel {
       background: linear-gradient(
         145deg,
-        rgba(83, 66, 120, 0.94) 0%,
-        rgba(68, 57, 101, 0.92) 40%,
-        rgba(54, 60, 102, 0.92) 72%,
-        rgba(74, 63, 108, 0.94) 100%
+        rgba(95, 79, 33, 0.92) 0%,
+        rgba(79, 68, 28, 0.9) 40%,
+        rgba(68, 61, 33, 0.9) 72%,
+        rgba(90, 74, 29, 0.92) 100%
       );
-      border: 1px solid rgba(196, 181, 253, 0.22);
+      border: 1px solid rgba(217, 180, 71, 0.24);
       box-shadow:
         inset 0 1px 1px rgba(255, 255, 255, 0.08),
         inset 0 -1px 0 rgba(15, 23, 42, 0.2),
@@ -511,6 +511,7 @@ return (
       display: flex;
       gap: 12px;
       margin-bottom: 16px;
+      align-items: stretch;
     }
 
     .stat {
@@ -521,11 +522,13 @@ return (
       min-height: 84px;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
       color: white;
       background: linear-gradient(135deg, #27483b, #335a4c, #456e5f);
       box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18),
         0 6px 14px rgba(21, 45, 36, 0.2);
       border: none;
+      box-sizing: border-box;
     }
 
     .stat div {
@@ -544,10 +547,11 @@ return (
 
     .stat small {
       display: block;
-      margin-top: 3px;
+      margin-top: 6px;
       color: rgba(255, 255, 255, 0.75);
       font-size: 11px;
       line-height: 1.35;
+      min-height: 28px;
     }
 
     .stat-clickable {
@@ -681,6 +685,7 @@ return (
 
       .stat small {
         font-size: 10px;
+        min-height: 24px;
       }
 
       .hero-panel {
