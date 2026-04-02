@@ -666,6 +666,8 @@ const input = {
 
 const inputInner = {
   width: "100%",
+  minWidth: 0,
+  maxWidth: "100%",
   padding: "10px 12px",
   borderRadius: 10,
   border: "1px solid var(--border)",
@@ -751,6 +753,7 @@ const box = {
   flexDirection: "column" as const,
   gap: 4,
   width: "100%",
+  minWidth: 0,
 };
 
 const fullWidthBox = {
@@ -761,6 +764,7 @@ const scheduleRow = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: 10,
+  width: "100%",
 };
 
 const btn = {
