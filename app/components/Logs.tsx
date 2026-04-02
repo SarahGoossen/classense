@@ -49,6 +49,7 @@ const getStoredRemindersEnabled = () => {
 };
 
 export default function Logs() {
+  const [isMobile, setIsMobile] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
 
@@ -121,6 +122,13 @@ export default function Logs() {
       }
       localStorage.removeItem("editLogId");
     }
+  }, []);
+
+  useEffect(() => {
+    const updateViewport = () => setIsMobile(window.innerWidth <= 640);
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
   useEffect(() => {
@@ -745,14 +753,14 @@ const classTime = lessonTime || getClassTime(selectedClass);
     return (
       <div style={shellStyle}>
         <Toast />
-        <div style={{ maxWidth: 520, margin: "0 auto", padding: "16px" }}>
+        <div style={{ maxWidth: isMobile ? "100%" : 520, margin: "0 auto", padding: isMobile ? "8px 0 16px" : "16px" }}>
           <div
             style={{
               background: "var(--surface-soft)",
               backdropFilter: "blur(6px)",
               WebkitBackdropFilter: "blur(6px)",
               borderRadius: "16px",
-              padding: "18px",
+              padding: isMobile ? "16px" : "18px",
               border: "1px solid var(--border)",
               boxShadow:
                 "0 10px 30px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",

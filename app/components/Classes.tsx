@@ -110,11 +110,11 @@ export default function Classes() {
           style={inputFull}
         />
 
-        <div style={{ ...inputRow, flexDirection: isMobile ? "column" : "row" }}>
+        <div style={inputRow}>
           <select
             value={newDay}
             onChange={(e) => setNewDay(Number(e.target.value))}
-            style={select}
+            style={{ ...select, flex: isMobile ? "1 1 44%" : select.flex }}
           >
             {days.map((d, i) => (
               <option key={i} value={i}>{d}</option>
@@ -125,12 +125,12 @@ export default function Classes() {
             type="time"
             value={newTime}
             onChange={(e) => setNewTime(e.target.value)}
-            style={select}
+            style={{ ...select, flex: isMobile ? "1 1 36%" : select.flex }}
           />
 
           <button
             onClick={handleAdd}
-            style={btn}
+            style={{ ...btn, width: isMobile ? "100%" : "auto" }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
               e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.2)";

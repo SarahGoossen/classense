@@ -637,13 +637,50 @@ return (
     }
 
     @media (max-width: 640px) {
-      .actions,
+      .page {
+        padding: 16px;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+
       .stats {
-        flex-direction: column;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
       }
 
       .action-card {
-        min-height: auto;
+        min-height: 92px;
+        padding: 12px 14px;
+      }
+
+      .action-title {
+        font-size: 16px;
+      }
+
+      .action-copy {
+        font-size: 11px;
+      }
+
+      .stat {
+        min-height: 72px;
+        padding: 10px;
+      }
+
+      .stat div {
+        font-size: 18px;
+      }
+
+      .stat span {
+        font-size: 11px;
+      }
+
+      .stat small {
+        font-size: 10px;
       }
 
       .hero-panel {
