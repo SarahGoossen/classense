@@ -14,6 +14,14 @@ export function calculateReminderTime(
     const result = new Date(base);
 
     switch (offset) {
+      case "30m":
+        result.setMinutes(result.getMinutes() - 30);
+        break;
+
+      case "1h":
+        result.setHours(result.getHours() - 1);
+        break;
+
       case "1w":
         result.setDate(result.getDate() - 7);
         break;

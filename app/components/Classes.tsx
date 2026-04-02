@@ -269,7 +269,7 @@ export default function Classes() {
 
 const container = {
   padding: 20,
-  maxWidth: 520,
+  maxWidth: 620,
   margin: "0 auto",
 };
 

@@ -254,7 +254,7 @@ export default function Library() {
 
 const container = {
   padding: 20,
-  maxWidth: 520,
+  maxWidth: 620,
   margin: "0 auto",
 };
 

@@ -1,9 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
+import { calculateReminderTime } from "../utils/reminders";
 
 type ReminderItem = {
   id: number;
   logId?: number;
+  eventId?: number;
   title: string;
   className: string;
   lessonDate: string;
@@ -59,6 +61,8 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   const [eventTitle, setEventTitle] = useState("");
   const [time, setTime] = useState("");
   const [notes, setNotes] = useState("");
+  const [enableEventReminder, setEnableEventReminder] = useState(false);
+  const [eventReminderTime, setEventReminderTime] = useState("2h");
   const [events, setEvents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [editingId, setEditingId] = useState(null);
@@ -90,39 +94,98 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     localStorage.setItem("plannerEvents", JSON.stringify(events));
   }, [events, loaded]);
 
+  useEffect(() => {
+    if (!loaded) return;
+    localStorage.setItem("reminders", JSON.stringify(reminders));
+  }, [reminders, loaded]);
+
+  const upsertEventReminder = (eventId: number, eventName: string, reminderDate: string, reminderTime: string, offset: string) => {
+    const remindAt = calculateReminderTime(
+      new Date(`${reminderDate}T${reminderTime}:00`).toISOString(),
+      offset
+    ).toISOString();
+
+    setReminders((prev) => {
+      const withoutCurrent = prev.filter((item) => item.eventId !== eventId);
+      return [
+        ...withoutCurrent,
+        {
+          id: Date.now(),
+          eventId,
+          title: eventName,
+          className: eventName,
+          lessonDate: reminderDate,
+          classTime: reminderTime,
+          remindAt,
+          type: "event",
+        },
+      ];
+    });
+  };
+
+  const removeEventReminder = (eventId: number) => {
+    setReminders((prev) => prev.filter((item) => item.eventId !== eventId));
+  };
+
   const handleAdd = () => {
     if (!date || (!selectedClass && !eventTitle.trim())) return;
 
     const eventName = selectedClass || eventTitle.trim();
 
     if (editingId) {
-      setEvents((prev) =>
-        prev.map((e) =>
-          e.id === editingId
-            ? { ...e, date, className: eventName, time, notes }
-            : e
-        )
-      );
-      setEditingId(null);
-    } else {
-      const newEvent = {
-        id: Date.now(),
+      const nextEvent = {
+        id: editingId,
         date,
         className: eventName,
         time,
         notes,
+        reminderEnabled: enableEventReminder,
+        reminderOffset: eventReminderTime,
+      };
+
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === editingId
+            ? nextEvent
+            : e
+        )
+      );
+
+      if (enableEventReminder && date && time) {
+        upsertEventReminder(editingId, eventName, date, time, eventReminderTime);
+      } else {
+        removeEventReminder(editingId);
+      }
+      setEditingId(null);
+    } else {
+      const newEventId = Date.now();
+      const newEvent = {
+        id: newEventId,
+        date,
+        className: eventName,
+        time,
+        notes,
+        reminderEnabled: enableEventReminder,
+        reminderOffset: eventReminderTime,
       };
       setEvents((prev) => [newEvent, ...prev]);
+
+      if (enableEventReminder && date && time) {
+        upsertEventReminder(newEventId, eventName, date, time, eventReminderTime);
+      }
     }
 
     setSelectedClass("");
     setEventTitle("");
     setTime("");
     setNotes("");
+    setEnableEventReminder(false);
+    setEventReminderTime("2h");
   };
 
   const handleDelete = (id) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
+    removeEventReminder(id);
   };
 
   const handleEdit = (event) => {
@@ -132,6 +195,8 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setEventTitle(matchedClass ? "" : event.className);
     setTime(event.time);
     setNotes(event.notes);
+    setEnableEventReminder(Boolean(event.reminderEnabled));
+    setEventReminderTime(event.reminderOffset || "2h");
     setEditingId(event.id);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -184,7 +249,6 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   const handleDeleteReminder = (id: number) => {
     const updated = reminders.filter((item) => item.id !== id);
     setReminders(updated);
-    localStorage.setItem("reminders", JSON.stringify(updated));
   };
 
   const handleEditReminder = (reminder: ReminderItem) => {
@@ -192,6 +256,13 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     localStorage.setItem("editLogId", reminder.logId.toString());
     setTab?.("logs");
   };
+
+  const eventReminderPreview = (() => {
+    if (!enableEventReminder || !date || !time) return "";
+    return formatReminderDate(
+      calculateReminderTime(new Date(`${date}T${time}:00`).toISOString(), eventReminderTime).toISOString()
+    );
+  })();
 
   return (
     <div style={{ ...container, padding: isMobile ? 16 : 20 }}>
@@ -259,6 +330,48 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
           <Box label="Notes" fullWidth>
             <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" style={inputInner}/>
           </Box>
+
+          <div style={reminderCard}>
+            <div style={sectionLabel}>Reminder</div>
+            <div style={reminderToggleRow}>
+              <div style={sectionHint}>
+                Add an optional reminder for this calendar event or class.
+              </div>
+              <button
+                onClick={() => setEnableEventReminder((current) => !current)}
+                style={{
+                  ...toggleBtn,
+                  background: enableEventReminder ? "rgba(59,130,246,0.18)" : "var(--surface)",
+                }}
+              >
+                {enableEventReminder ? "On" : "Off"}
+              </button>
+            </div>
+
+            {enableEventReminder && (
+              <div style={{ display: "grid", gap: 10, marginTop: 10 }}>
+                <select
+                  value={eventReminderTime}
+                  onChange={(e) => setEventReminderTime(e.target.value)}
+                  style={inputInner}
+                >
+                  <option value="30m">30 minutes before</option>
+                  <option value="1h">1 hour before</option>
+                  <option value="2h">2 hours before</option>
+                  <option value="12h">12 hours before</option>
+                  <option value="1d">1 day before</option>
+                  <option value="2d">2 days before</option>
+                  <option value="1w">1 week before</option>
+                </select>
+
+                {eventReminderPreview && (
+                  <div style={reminderPreviewStyle}>
+                    Reminder will fire around {eventReminderPreview}.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <button
@@ -432,7 +545,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       <div style={listSection}>
         <div style={listHeader}>
           <div style={listTitle}>Reminder Queue</div>
-          <div style={listHint}>Prep reminders linked to your saved lessons.</div>
+          <div style={listHint}>Lesson prep reminders and calendar event reminders.</div>
         </div>
 
         {upcomingReminders.length === 0 && (
@@ -452,12 +565,19 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             </div>
             <div style={notesStyle}>
               {reminder.className}
-              {reminder.lessonDate ? ` • Lesson ${formatEventDate(reminder.lessonDate)}` : ""}
+              {reminder.lessonDate ? ` • ${reminder.type === "event" ? "Event" : "Lesson"} ${formatEventDate(reminder.lessonDate)}` : ""}
             </div>
             <div style={{ ...actions, flexWrap: "wrap" }}>
-              {reminder.logId && (
+              {(reminder.logId || reminder.eventId) && (
                 <button
-                  onClick={() => handleEditReminder(reminder)}
+                  onClick={() => {
+                    if (reminder.eventId) {
+                      const eventMatch = events.find((event) => event.id === reminder.eventId);
+                      if (eventMatch) handleEdit(eventMatch);
+                      return;
+                    }
+                    handleEditReminder(reminder);
+                  }}
                   style={editBtn}
                   onMouseEnter={(ev) => {
                     ev.currentTarget.style.transform = "translateY(-1px)";
@@ -506,7 +626,7 @@ function Box({ label, children, fullWidth = false }) {
 
 const container = {
   padding: 20,
-  maxWidth: 520,
+  maxWidth: 620,
   margin: "0 auto",
 };
 
@@ -562,6 +682,40 @@ const card = {
   padding: 12,
   marginBottom: 12,
   boxShadow: "var(--shadow-soft)",
+};
+
+const reminderCard = {
+  background: "linear-gradient(145deg, rgba(37,99,235,0.08), var(--ghost-bg))",
+  border: "1px solid rgba(59,130,246,0.16)",
+  borderRadius: 12,
+  padding: 12,
+  display: "grid",
+  gap: 8,
+};
+
+const reminderToggleRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+};
+
+const toggleBtn = {
+  minWidth: 72,
+  padding: "10px 12px",
+  borderRadius: 10,
+  border: "1px solid var(--border)",
+  cursor: "pointer",
+  color: "var(--text)",
+};
+
+const reminderPreviewStyle = {
+  fontSize: 13,
+  color: "var(--muted)",
+  padding: "10px 12px",
+  borderRadius: 10,
+  background: "rgba(59,130,246,0.08)",
+  border: "1px solid rgba(59,130,246,0.14)",
 };
 
 const formHeader = {

@@ -606,6 +606,8 @@ const classTime = lessonTime || getClassTime(selectedClass);
     minHeight: "100%",
     color: "var(--text)",
     fontFamily: "inherit",
+    maxWidth: 620,
+    margin: "0 auto",
   };
 
   const filterPanelTitle: React.CSSProperties = {
@@ -753,7 +755,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
     return (
       <div style={shellStyle}>
         <Toast />
-        <div style={{ maxWidth: isMobile ? "100%" : 520, margin: "0 auto", padding: isMobile ? "8px 0 16px" : "16px" }}>
+        <div style={{ maxWidth: "100%", margin: "0 auto", padding: isMobile ? "8px 0 16px" : "16px" }}>
           <div
             style={{
               background: "var(--surface-soft)",
