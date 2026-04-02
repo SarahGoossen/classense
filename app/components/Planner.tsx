@@ -312,7 +312,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
           <div style={{ ...scheduleRow, gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
             <Box label="Date">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputInner}/>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                style={dateInputInner}
+              />
             </Box>
 
             <Box label="Time">
@@ -674,6 +679,15 @@ const inputInner = {
   background: "var(--input-bg)",
   color: "var(--text)",
   boxSizing: "border-box" as const,
+};
+
+const dateInputInner = {
+  ...inputInner,
+  display: "block",
+  appearance: "none" as const,
+  WebkitAppearance: "none" as const,
+  overflow: "hidden",
+  minHeight: 44,
 };
 
 const card = {
