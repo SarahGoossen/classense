@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Classense",
   description: "Classense keeps teaching plans, classes, logs, and resources organized.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Classense",
+  },
 };
 
 export default function RootLayout({

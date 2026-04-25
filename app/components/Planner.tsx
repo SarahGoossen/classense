@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { calculateReminderTime } from "../utils/reminders";
 
 type ReminderItem = {
@@ -55,6 +55,7 @@ const formatEventDate = (value?: string) => {
 };
 
 export default function Planner({ setTab }: { setTab?: (tab: string) => void }) {
+  const scheduledEventsRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [date, setDate] = useState("");
   const [selectedClass, setSelectedClass] = useState("");
@@ -98,6 +99,17 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     if (!loaded) return;
     localStorage.setItem("reminders", JSON.stringify(reminders));
   }, [reminders, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+
+    if (localStorage.getItem("openPlannerSection") === "scheduled") {
+      window.setTimeout(() => {
+        scheduledEventsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        localStorage.removeItem("openPlannerSection");
+      }, 120);
+    }
+  }, [loaded]);
 
   const upsertEventReminder = (eventId: number, eventName: string, reminderDate: string, reminderTime: string, offset: string) => {
     const remindAt = calculateReminderTime(
@@ -269,7 +281,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       <div style={header}>
         <h2 style={title}>Calendar</h2>
         <div style={subtitle}>
-          Plan your upcoming classes, events, and reminders in one place.
+          Plan classes, events, and reminders in one clear place.
         </div>
       </div>
 
@@ -286,7 +298,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         <div style={formHeader}>
           <div>
             <div style={sectionLabel}>Add Event</div>
-            <div style={sectionHint}>Add a dated item to your teaching calendar.</div>
+            <div style={sectionHint}>Add something important to your teaching schedule.</div>
           </div>
         </div>
         <div style={grid}>
@@ -294,7 +306,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             <input
               value={eventTitle}
               onChange={(e) => setEventTitle(e.target.value)}
-              placeholder="Birthday party, meeting..."
+              placeholder="Parent meeting, studio event..."
               style={inputInner}
             />
           </Box>
@@ -333,14 +345,14 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
           </div>
 
           <Box label="Notes" fullWidth>
-            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional" style={inputInner}/>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Optional details" style={inputInner}/>
           </Box>
 
           <div style={reminderCard}>
             <div style={sectionLabel}>Reminder</div>
             <div style={reminderToggleRow}>
               <div style={sectionHint}>
-                Add an optional reminder for this calendar event or class.
+                Turn this on if you want a reminder before the event.
               </div>
               <button
                 onClick={() => setEnableEventReminder((current) => !current)}
@@ -371,7 +383,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
                 {eventReminderPreview && (
                   <div style={reminderPreviewStyle}>
-                    Reminder will fire around {eventReminderPreview}.
+                    Reminder will be sent around {eventReminderPreview}.
                   </div>
                 )}
               </div>
@@ -441,6 +453,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       <div style={calendarGrid}>
         {days.map((day, i) => {
           const isToday = day && day.toISOString().split("T")[0] === today;
+          const dayEvents = day ? getEventsForDate(day) : [];
 
           return (
             <div
@@ -457,18 +470,23 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
                 <>
                   <div style={dayNumber}>{day.getDate()}</div>
 
-                  {getEventsForDate(day).map((e) => (
-                    <div
-                      key={e.id}
-                      style={eventDot}
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        handleSelectEvent(e);
-                      }}
-                    >
-                      {e.className}
+                  {dayEvents.length > 0 ? (
+                    <div style={eventMarkersWrap}>
+                      {dayEvents.slice(0, 3).map((e) => (
+                        <span
+                          key={e.id}
+                          style={eventDot}
+                          onClick={(ev) => {
+                            ev.stopPropagation();
+                            handleSelectEvent(e);
+                          }}
+                        />
+                      ))}
+                      {dayEvents.length > 3 ? (
+                        <span style={eventCountBadge}>+{dayEvents.length - 3}</span>
+                      ) : null}
                     </div>
-                  ))}
+                  ) : null}
                 </>
               )}
             </div>
@@ -477,10 +495,10 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       </div>
 
       {/* LIST */}
-      <div style={listSection}>
-        <div style={listHeader}>
-          <div style={listTitle}>Scheduled Events</div>
-          <div style={listHint}>Your upcoming classes and added calendar items.</div>
+      <div ref={scheduledEventsRef} style={listSection}>
+          <div style={listHeader}>
+            <div style={listTitle}>Scheduled Events</div>
+          <div style={listHint}>This is where the full event details live.</div>
         </div>
 
         {filteredEvents.length === 0 && (
@@ -631,7 +649,7 @@ function Box({ label, children, fullWidth = false }) {
 
 const container = {
   padding: 20,
-  maxWidth: 620,
+  maxWidth: 700,
   margin: "0 auto",
 };
 
@@ -639,23 +657,25 @@ const header = {
   padding: "0 0 0 14px",
   borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
   boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
-  marginBottom: 16,
+  marginBottom: 22,
 };
 
 const title = {
-  fontSize: 22,
-  fontWeight: 600,
+  fontSize: 26,
+  fontWeight: 650,
   marginBottom: 0,
   color: "var(--page-title)",
   textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+  letterSpacing: "-0.02em",
 };
 
 const subtitle = {
   fontSize: 15,
-  lineHeight: 1.45,
+  lineHeight: 1.6,
   color: "var(--page-subtitle)",
   marginTop: 8,
   fontWeight: 500,
+  maxWidth: "46ch",
 };
 
 const input = {
@@ -691,19 +711,19 @@ const dateInputInner = {
 };
 
 const card = {
-  background: "var(--surface-soft)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
   backdropFilter: "blur(6px)",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
-  padding: 12,
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 20,
+  padding: 18,
   marginBottom: 12,
-  boxShadow: "var(--shadow-soft)",
+  boxShadow: "0 18px 40px rgba(15,23,42,0.08)",
 };
 
 const reminderCard = {
-  background: "linear-gradient(145deg, rgba(37,99,235,0.08), var(--ghost-bg))",
+  background: "linear-gradient(145deg, rgba(248,250,255,0.96), rgba(235,242,255,0.94) 48%, rgba(245,248,255,0.96))",
   border: "1px solid rgba(59,130,246,0.16)",
-  borderRadius: 12,
+  borderRadius: 18,
   padding: 12,
   display: "grid",
   gap: 8,
@@ -784,7 +804,7 @@ const scheduleRow = {
 const btn = {
   marginTop: 10,
   padding: "11px 14px",
-  borderRadius: 12,
+  borderRadius: 16,
   background: "linear-gradient(135deg,#1e3a8a,#2563eb,#60a5fa)",
   color: "white",
   border: "none",
@@ -855,16 +875,26 @@ const dayNumber = {
   color: "var(--text)",
 };
 
+const eventMarkersWrap = {
+  marginTop: 8,
+  display: "flex",
+  alignItems: "center",
+  gap: 4,
+  flexWrap: "wrap" as const,
+};
+
 const eventDot = {
-  marginTop: 3,
-  fontSize: 9,
+  width: 8,
+  height: 8,
   background: "rgba(37,99,235,0.92)",
-  color: "#fff",
-  borderRadius: 6,
-  padding: "2px 5px",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
-  whiteSpace: "nowrap" as const,
+  borderRadius: 999,
+  display: "inline-block",
+};
+
+const eventCountBadge = {
+  fontSize: 9,
+  fontWeight: 700,
+  color: "var(--muted)",
 };
 
 const listSection = {
@@ -891,12 +921,12 @@ const listHint = {
 
 const eventCard = {
   marginTop: 8,
-  padding: 12,
-  borderRadius: 12,
-  background: "var(--surface-soft)",
-  border: "1px solid var(--border)",
+  padding: 14,
+  borderRadius: 16,
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  border: "1px solid rgba(148,163,184,0.16)",
   transition: "all 0.2s ease",
-  boxShadow: "var(--shadow-soft)",
+  boxShadow: "0 14px 28px rgba(15,23,42,0.07)",
   color: "var(--text)",
 };
 
@@ -940,7 +970,7 @@ const actions = {
 const editBtn = {
   minWidth: 72,
   minHeight: 36,
-  background: "var(--surface)",
+  background: "rgba(255,255,255,0.84)",
   border: "1px solid var(--border-strong)",
   borderRadius: 10,
   color: "#2563eb",

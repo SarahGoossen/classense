@@ -269,7 +269,7 @@ export default function Classes() {
 
 const container = {
   padding: 20,
-  maxWidth: 620,
+  maxWidth: 700,
   margin: "0 auto",
 };
 
@@ -277,35 +277,37 @@ const header = {
   padding: "0 0 0 14px",
   borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
   boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
-  marginBottom: 20,
+  marginBottom: 22,
 };
 
 const title = {
-  fontSize: 24,
-  fontWeight: 600,
+  fontSize: 26,
+  fontWeight: 650,
   marginBottom: 0,
   color: "var(--page-title)",
   textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+  letterSpacing: "-0.02em",
 };
 
 const subtitle = {
   fontSize: 15,
-  lineHeight: 1.45,
+  lineHeight: 1.6,
   color: "var(--page-subtitle)",
   marginTop: 8,
   fontWeight: 500,
+  maxWidth: "46ch",
 };
 
 const inputCard = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
-  background: "var(--surface)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(246,249,255,0.94))",
   backdropFilter: "blur(6px)",
-  border: "1px solid var(--border-strong)",
-  padding: 12,
-  borderRadius: 14,
-  boxShadow: "var(--shadow-soft)",
+  border: "1px solid rgba(148,163,184,0.18)",
+  padding: 16,
+  borderRadius: 20,
+  boxShadow: "0 18px 40px rgba(15,23,42,0.08)",
 };
 
 const input = {
@@ -361,8 +363,8 @@ const selectInline = {
 const btn = {
   flex: "0 0 auto",
   minWidth: 88,
-  padding: "10px 16px",
-  borderRadius: 10,
+  padding: "11px 18px",
+  borderRadius: 12,
   background: "linear-gradient(135deg, #1e3a8a, #2563eb, #60a5fa)",
   color: "#ffffff",
   cursor: "pointer",
@@ -373,18 +375,18 @@ const btn = {
 };
 
 const card = {
-  background: "var(--surface-soft)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
   backdropFilter: "blur(6px)",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
-  padding: 14,
-  marginBottom: 10,
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 18,
+  padding: 16,
+  marginBottom: 12,
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
   gap: 10,
   transition: "all 0.2s ease",
-  boxShadow: "var(--shadow-soft)",
+  boxShadow: "0 14px 28px rgba(15,23,42,0.07)",
   color: "var(--text)",
 };
 
@@ -394,8 +396,8 @@ const emptyCard = {
 };
 
 const className = {
-  fontWeight: 600,
-  fontSize: 15,
+  fontWeight: 650,
+  fontSize: 16,
   color: "var(--text)",
 };
 
@@ -412,13 +414,13 @@ const actions = {
 
 const editBtn = {
   color: "var(--text)",
-  background: "var(--ghost-bg)",
+  background: "rgba(255,255,255,0.84)",
   border: "1px solid var(--border)",
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 600,
-  borderRadius: 8,
-  padding: "8px 12px",
+  borderRadius: 10,
+  padding: "8px 13px",
   minWidth: 72,
   minHeight: 36,
   textAlign: "center" as const,
@@ -431,8 +433,8 @@ const deleteBtn = {
   cursor: "pointer",
   fontSize: 14,
   fontWeight: 600,
-  borderRadius: 8,
-  padding: "8px 12px",
+  borderRadius: 10,
+  padding: "8px 13px",
   minWidth: 72,
   minHeight: 36,
   textAlign: "center" as const,

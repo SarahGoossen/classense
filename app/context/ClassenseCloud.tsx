@@ -40,6 +40,7 @@ type CloudContextValue = {
   syncStatus: string;
   signIn: (email: string, password: string) => Promise<{ error?: string; message?: string }>;
   signUp: (email: string, password: string) => Promise<{ error?: string; message?: string }>;
+  resetPassword: (email: string) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
 };
 
@@ -375,6 +376,29 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       : { message: "Check your email for the confirmation link." };
   };
 
+  const resetPassword = async (email: string) => {
+    if (!supabase) {
+      return { error: "Supabase is not configured yet." };
+    }
+
+    if (!email.trim()) {
+      return { error: "Enter your email first so we know where to send the reset link." };
+    }
+
+    const redirectTo =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/auth/confirm`
+        : undefined;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo,
+    });
+
+    return error
+      ? { error: error.message }
+      : { message: "If this email is registered, a password reset link is on the way." };
+  };
+
   const signOut = async () => {
     if (!supabase) return;
     setSigningOut(true);
@@ -397,6 +421,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         syncStatus,
         signIn,
         signUp,
+        resetPassword,
         signOut,
       }}
     >

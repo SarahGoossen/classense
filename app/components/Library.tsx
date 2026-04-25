@@ -254,7 +254,7 @@ export default function Library() {
 
 const container = {
   padding: 20,
-  maxWidth: 620,
+  maxWidth: 700,
   margin: "0 auto",
 };
 
@@ -262,37 +262,39 @@ const header = {
   padding: "0 0 0 14px",
   borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
   boxShadow: "inset 1px 0 0 rgba(255,255,255,0.18)",
-  marginBottom: 16,
+  marginBottom: 22,
 };
 
 const titleStyle = {
-  fontSize: 22,
-  fontWeight: 600,
+  fontSize: 26,
+  fontWeight: 650,
   marginBottom: 0,
   color: "var(--page-title)",
   textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+  letterSpacing: "-0.02em",
 };
 
 const subtitle = {
   fontSize: 15,
-  lineHeight: 1.45,
+  lineHeight: 1.6,
   color: "var(--page-subtitle)",
   marginTop: 8,
   fontWeight: 500,
+  maxWidth: "48ch",
 };
 
 const card = {
-  background: "var(--surface-soft)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
   backdropFilter: "blur(6px)",
-  border: "1px solid var(--border)",
-  padding: 16,
-  borderRadius: 14,
+  border: "1px solid rgba(148,163,184,0.16)",
+  padding: 18,
+  borderRadius: 20,
   display: "flex",
   flexDirection: "column",
   gap: 12,
-  boxShadow: "var(--shadow-soft)",
+  boxShadow: "0 18px 40px rgba(15,23,42,0.08)",
   color: "var(--text)",
-  marginBottom: 12,
+  marginBottom: 14,
 };
 
 const input = {
@@ -344,7 +346,7 @@ const textarea = {
 
 const btn = {
   padding: 12,
-  borderRadius: 12,
+  borderRadius: 14,
   background: "linear-gradient(135deg,#1e3a8a,#2563eb,#60a5fa)",
   color: "white",
   cursor: "pointer",
@@ -355,14 +357,14 @@ const btn = {
 };
 
 const itemCard = {
-  background: "var(--surface-soft)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
   backdropFilter: "blur(6px)",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
-  padding: 14,
-  marginBottom: 12,
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 18,
+  padding: 16,
+  marginBottom: 14,
   transition: "all 0.2s ease",
-  boxShadow: "var(--shadow-soft)",
+  boxShadow: "0 14px 28px rgba(15,23,42,0.07)",
   color: "var(--text)",
 };
 
@@ -372,8 +374,8 @@ const emptyState = {
 };
 
 const emptyTitle = {
-  fontSize: 15,
-  fontWeight: 600,
+  fontSize: 16,
+  fontWeight: 650,
   marginBottom: 4,
   color: "var(--text)",
 };
@@ -399,12 +401,12 @@ const itemTitle = {
 
 const tag = {
   display: "inline-block",
-  background: "var(--ghost-bg)",
-  padding: "4px 8px",
-  borderRadius: 6,
+  background: "rgba(37,99,235,0.1)",
+  padding: "5px 10px",
+  borderRadius: 999,
   fontSize: 12,
   whiteSpace: "nowrap",
-  color: "var(--text)",
+  color: "#1d4ed8",
 };
 
 const linkStyle = {
@@ -432,7 +434,7 @@ const editBtn = {
   minWidth: 72,
   minHeight: 36,
   color: "var(--text)",
-  background: "var(--surface)",
+  background: "rgba(255,255,255,0.84)",
   border: "1px solid var(--border-strong)",
   borderRadius: 10,
   cursor: "pointer",

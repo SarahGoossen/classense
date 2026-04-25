@@ -1,23 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { FormEvent, MouseEvent, useState } from "react";
 import { useClassenseCloud } from "../context/ClassenseCloud";
 
 export default function AuthGate() {
-  const { authMode, setAuthMode, signIn, signUp, syncStatus } = useClassenseCloud();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { authMode, setAuthMode, signIn, signUp, resetPassword, syncStatus } = useClassenseCloud();
+  const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setSubmitting(true);
     setMessage("");
+
+    const formData = new FormData(event.currentTarget);
+    const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
 
     const result =
       authMode === "signin"
         ? await signIn(email, password)
         : await signUp(email, password);
+
+    setSubmitting(false);
+    setMessage(result.error || result.message || "");
+  };
+
+  const handlePasswordReset = async (event: MouseEvent<HTMLButtonElement>) => {
+    const form = event.currentTarget.form;
+    if (!form) {
+      setMessage("We couldn't read the email form. Refresh and try again.");
+      return;
+    }
+
+    const formData = new FormData(form);
+    const email = String(formData.get("email") || "").trim();
+
+    setSubmitting(true);
+    setMessage("");
+
+    const result = await resetPassword(email);
 
     setSubmitting(false);
     setMessage(result.error || result.message || "");
@@ -39,7 +62,7 @@ export default function AuthGate() {
           </p>
         </div>
 
-        <div className="auth-form">
+        <form className="auth-form" onSubmit={handleSubmit}>
           <div className="auth-tabs">
             <button
               className={authMode === "signin" ? "active" : ""}
@@ -60,9 +83,9 @@ export default function AuthGate() {
           <label>
             Email
             <input
+              autoComplete="email"
               className="app-input"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              name="email"
               placeholder="teacher@example.com"
               type="email"
             />
@@ -70,20 +93,66 @@ export default function AuthGate() {
 
           <label>
             Password
-            <input
-              className="app-input"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="At least 6 characters"
-              type="password"
-            />
+            <div className="password-field">
+              <input
+                autoComplete={authMode === "signin" ? "current-password" : "new-password"}
+                className="app-input password-input"
+                name="password"
+                placeholder="At least 6 characters"
+                type={showPassword ? "text" : "password"}
+              />
+              <button
+                className="password-toggle"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                onClick={() => setShowPassword((current) => !current)}
+                type="button"
+              >
+                {showPassword ? (
+                  <svg
+                    aria-hidden="true"
+                    className="password-icon"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M3 3l18 18M10.58 10.58A2 2 0 0012 14a2 2 0 001.42-.58M9.88 5.09A10.94 10.94 0 0112 5c5 0 9.27 3.11 11 7-1 2.26-2.75 4.15-4.98 5.32M6.61 6.61C4.62 7.8 3.06 9.62 2 12c1.73 3.89 6 7 10 7 1.73 0 3.38-.36 4.86-1.02"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    aria-hidden="true"
+                    className="password-icon"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      d="M2 12s3.64-7 10-7 10 7 10 7-3.64 7-10 7-10-7-10-7z"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinejoin="round"
+                      strokeWidth="1.8"
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      fill="none"
+                      r="3"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    />
+                  </svg>
+                )}
+              </button>
+            </div>
           </label>
 
           <button
             className="app-button app-button-primary"
             disabled={submitting}
-            onClick={handleSubmit}
-            type="button"
+            type="submit"
           >
             {submitting
               ? "Working..."
@@ -92,8 +161,19 @@ export default function AuthGate() {
                 : "Create account"}
           </button>
 
+          {authMode === "signin" ? (
+            <button
+              className="auth-link"
+              disabled={submitting}
+              onClick={handlePasswordReset}
+              type="button"
+            >
+              Forgot password?
+            </button>
+          ) : null}
+
           <p className="auth-status">{message || syncStatus}</p>
-        </div>
+        </form>
       </div>
 
       <style jsx>{`
@@ -200,6 +280,35 @@ export default function AuthGate() {
           color: #0f172a;
         }
 
+        .password-field {
+          position: relative;
+        }
+
+        .password-input {
+          padding-right: 72px;
+        }
+
+        .password-toggle {
+          position: absolute;
+          top: 50%;
+          right: 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          transform: translateY(-50%);
+          border: none;
+          background: transparent;
+          color: #2563eb;
+          cursor: pointer;
+        }
+
+        .password-icon {
+          width: 18px;
+          height: 18px;
+        }
+
         .app-button {
           border: none;
           border-radius: 12px;
@@ -218,6 +327,17 @@ export default function AuthGate() {
           margin: 0;
           color: #64748b;
           font-size: 0.9rem;
+        }
+
+        .auth-link {
+          justify-self: start;
+          padding: 0;
+          border: none;
+          background: transparent;
+          color: #2563eb;
+          font-size: 0.92rem;
+          font-weight: 700;
+          cursor: pointer;
         }
 
         @media (max-width: 800px) {

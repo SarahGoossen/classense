@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useClassenseCloud } from "../context/ClassenseCloud";
 import {
+  getOrCreatePushDeviceId,
+  registerPushServiceWorker,
+  urlBase64ToUint8Array,
+} from "../lib/push-client";
+import {
   AUTO_DARK_START_HOUR,
   AUTO_LIGHT_START_HOUR,
   applyTheme,
@@ -42,6 +47,9 @@ export default function Settings() {
 
   const [prepTime, setPrepTime] = useState("2h");
   const [theme, setTheme] = useState<ThemeMode>("light");
+  const [notificationStatus, setNotificationStatus] = useState("Checking browser support...");
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
   const { cloudEnabled, user, syncStatus, signOut, signingOut } = useClassenseCloud();
 
   useEffect(() => {
@@ -66,6 +74,18 @@ export default function Settings() {
     if (savedPrepTime) setPrepTime(savedPrepTime);
     setTheme(savedTheme);
     applyTheme(savedTheme);
+
+    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
+      setNotificationStatus("This browser does not support Classense notifications.");
+      return;
+    }
+
+    setNotificationStatus(`Browser permission: ${Notification.permission}`);
+
+    void navigator.serviceWorker.ready.then(async (registration) => {
+      const subscription = await registration.pushManager.getSubscription();
+      setPushEnabled(Boolean(subscription));
+    });
   }, []);
 
   useEffect(() => {
@@ -152,6 +172,135 @@ export default function Settings() {
       alert("That backup file could not be imported.");
     } finally {
       event.target.value = "";
+    }
+  };
+
+  const handleNotificationPermission = async () => {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      !("serviceWorker" in navigator)
+    ) {
+      alert("This browser does not support notifications.");
+      return;
+    }
+
+    const result = await Notification.requestPermission();
+    setNotificationStatus(`Browser permission: ${result}`);
+  };
+
+  const handleEnablePush = async () => {
+    if (
+      typeof window === "undefined" ||
+      !("Notification" in window) ||
+      !("serviceWorker" in navigator)
+    ) {
+      alert("This browser does not support push notifications.");
+      return;
+    }
+
+    try {
+      setPushBusy(true);
+
+      const permission =
+        Notification.permission === "granted"
+          ? "granted"
+          : await Notification.requestPermission();
+
+      setNotificationStatus(`Browser permission: ${permission}`);
+      if (permission !== "granted") {
+        return;
+      }
+
+      const registration = await registerPushServiceWorker();
+      const keyResponse = await fetch("/api/push/public-key");
+      const keyData = await keyResponse.json();
+
+      if (!keyResponse.ok || !keyData.publicKey) {
+        throw new Error(keyData.error || "Push public key is unavailable.");
+      }
+
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyData.publicKey),
+      });
+
+      const saveResponse = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          userId: user?.id || null,
+          deviceId: getOrCreatePushDeviceId(),
+          userAgent: navigator.userAgent,
+        }),
+      });
+      const saveData = await saveResponse.json();
+
+      if (!saveResponse.ok) {
+        throw new Error(saveData.error || "Could not save push subscription.");
+      }
+
+      setPushEnabled(true);
+      setNotificationStatus("Push notifications are connected for this browser.");
+    } catch (error) {
+      setNotificationStatus(
+        error instanceof Error ? error.message : "Could not enable push notifications."
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleDisablePush = async () => {
+    if (!("serviceWorker" in navigator)) return;
+
+    try {
+      setPushBusy(true);
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        await fetch("/api/push/unsubscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+
+      setPushEnabled(false);
+      setNotificationStatus("Push notifications are turned off for this browser.");
+    } catch (error) {
+      setNotificationStatus(
+        error instanceof Error ? error.message : "Could not disable push notifications."
+      );
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const handleSendTestPush = async () => {
+    try {
+      setPushBusy(true);
+      const response = await fetch("/api/push/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: getOrCreatePushDeviceId() }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Could not send test notification.");
+      }
+
+      setNotificationStatus("Test push sent. Check this browser for the notification.");
+    } catch (error) {
+      setNotificationStatus(
+        error instanceof Error ? error.message : "Could not send test notification."
+      );
+    } finally {
+      setPushBusy(false);
     }
   };
 
@@ -293,8 +442,9 @@ export default function Settings() {
         <div style={sectionTitle}>Notifications</div>
 
         <div style={helper}>
-          Reminders use your device notifications
+          Turn on push for this browser, then test the connection. Once VAPID keys and subscription storage are configured in production, this becomes the base for real deployed notifications.
         </div>
+        <div style={helper}>{notificationStatus}</div>
 
         <button
           style={secondaryBtn}
@@ -304,11 +454,41 @@ export default function Settings() {
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = "none";
           }}
-          onClick={() =>
-            alert("Go to your phone settings → Notifications → enable for this app")
-          }
+          onClick={() => void handleNotificationPermission()}
         >
-          How to Enable Notifications
+          Enable Browser Notifications
+        </button>
+
+        <button
+          style={secondaryBtn}
+          disabled={pushBusy}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "none";
+          }}
+          onClick={() => void (pushEnabled ? handleDisablePush() : handleEnablePush())}
+        >
+          {pushBusy
+            ? "Working..."
+            : pushEnabled
+              ? "Disable Push on This Device"
+              : "Connect Push on This Device"}
+        </button>
+
+        <button
+          style={secondaryBtn}
+          disabled={pushBusy || !pushEnabled}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = "translateY(-2px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = "none";
+          }}
+          onClick={() => void handleSendTestPush()}
+        >
+          Send Test Push
         </button>
       </div>
 
@@ -424,7 +604,7 @@ function Toggle({ label, value, setValue, mobile = false }) {
 
 const container = {
   padding: 20,
-  maxWidth: 620,
+  maxWidth: 700,
   margin: "0 auto",
 };
 
@@ -432,36 +612,38 @@ const header = {
   padding: "0 0 0 14px",
   borderLeft: "4px solid rgba(37, 99, 235, 0.82)",
   boxShadow: "inset 1px 0 0 rgba(255,255,255,0.2)",
-  marginBottom: 16,
+  marginBottom: 22,
 };
 
 const title = {
-  fontSize: 22,
-  fontWeight: 600,
+  fontSize: 26,
+  fontWeight: 650,
   marginBottom: 0,
   color: "var(--page-title)",
   textShadow: "0 1px 0 rgba(255,255,255,0.12)",
+  letterSpacing: "-0.02em",
 };
 
 const subtitle = {
   fontSize: 15,
-  lineHeight: 1.45,
+  lineHeight: 1.6,
   color: "var(--page-subtitle)",
   marginTop: 8,
   fontWeight: 500,
+  maxWidth: "50ch",
 };
 
 const card = {
-  background: "var(--surface-soft)",
+  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
   backdropFilter: "blur(6px)",
-  border: "1px solid var(--border)",
-  borderRadius: 14,
-  padding: 16,
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 20,
+  padding: 18,
   marginBottom: 12,
   display: "flex",
   flexDirection: "column",
   gap: 10,
-  boxShadow: "var(--shadow-soft)",
+  boxShadow: "0 18px 40px rgba(15,23,42,0.08)",
   color: "var(--text)",
 };
 
@@ -499,7 +681,7 @@ const helper = {
 const primaryBtn = {
   width: "100%",
   padding: 14,
-  borderRadius: 12,
+  borderRadius: 14,
   background: "linear-gradient(135deg,#1e3a8a,#2563eb,#60a5fa)",
   color: "white",
   border: "none",
@@ -510,8 +692,8 @@ const primaryBtn = {
 const secondaryBtn = {
   width: "100%",
   padding: 12,
-  borderRadius: 10,
-  background: "var(--ghost-bg)",
+  borderRadius: 12,
+  background: "rgba(255,255,255,0.84)",
   border: "1px solid var(--border)",
   cursor: "pointer",
   transition: "all 0.2s ease",

@@ -5,8 +5,6 @@ const getUserName = () => {
   if (typeof window === "undefined") return "";
   return localStorage.getItem("app_name") || "";
 };
-const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -46,6 +44,10 @@ type ReminderItem = {
   remindAt: string;
 };
 
+type LibraryItem = {
+  id?: number;
+};
+
 const formatReminderDate = (value?: string) => {
   if (!value) return "";
 
@@ -65,16 +67,19 @@ export default function Home({ setTab }: any) {
   const [logs, setLogs] = useState<Log[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
 
   // 🔥 CENTRALIZED LOADER
   const loadData = () => {
     const savedLogs = localStorage.getItem("logs");
     const savedClasses = localStorage.getItem("classes");
     const savedReminders = localStorage.getItem("reminders");
+    const savedLibrary = localStorage.getItem("library");
 
     setLogs(savedLogs ? JSON.parse(savedLogs) : []);
     setClasses(savedClasses ? JSON.parse(savedClasses) : []);
     setReminders(savedReminders ? JSON.parse(savedReminders) : []);
+    setLibraryItems(savedLibrary ? JSON.parse(savedLibrary) : []);
   };
 
   useEffect(() => {
@@ -139,37 +144,9 @@ export default function Home({ setTab }: any) {
     return next;
   };
 
- // 🔥 YOUR ORIGINAL LOGIC (FIXED CLEAN)
-const upcomingPrep = classes
-.filter((c) => {
-  const hasLog = logs.some((l) => l.className === c.name);
-  return !hasLog;
-})
-.map((c) => {
-  const rawNextDate = getNextClassDate(c.day, c.time);
-
-  if (!rawNextDate) {
-    return {
-      ...c,
-      nextDate: null,
-      displayTime: c.time,
-    };
-  }
-
-  const matchingLog = logs.find((l) => {
-    return l.className === c.name;
-  });
-
-  return {
-    ...c,
-    nextDate: rawNextDate,
-    displayTime: matchingLog?.classTime || c.time,
-  };
-});
-
 const recentLogs = [...logs]
 .sort((a, b) => (a.date < b.date ? 1 : -1))
-.slice(0, 5);
+.slice(0, 3);
 
 const upcomingReminders = [...reminders]
 .filter((reminder) => reminder.remindAt && new Date(reminder.remindAt).getTime() >= Date.now())
@@ -178,7 +155,7 @@ const upcomingReminders = [...reminders]
 
 const nextReminder = upcomingReminders[0];
 
-const thisWeekCount = logs.length;
+const libraryCount = libraryItems.length;
 
 return (
 <div className="page">
@@ -200,11 +177,11 @@ return (
         }}
       >
           {userName
-            ? `Welcome back, ${userName}. Your teaching command center is ready.`
-            : "Welcome. Your teaching command center is ready."}
+            ? `Welcome back, ${userName}. Run your classes like a pro. No chaos, no guesswork.`
+            : "Run your classes like a pro. No chaos, no guesswork."}
         </div>
 
-        <div className="subtitle">Stay on top of your lessons</div>
+        <div className="subtitle">Everything in one place-lessons, classes, notes, and reminders-so you can focus on teaching, not chasing details.</div>
       </div>
 
       <div className="actions">
@@ -212,7 +189,7 @@ return (
           <span className="action-kicker">Step 1</span>
           <span className="action-title">Add Class</span>
           <span className="action-copy">
-            Start by creating your classes so lessons can be linked correctly.
+            Set up your classes once. Everything else flows from here.
           </span>
         </button>
 
@@ -220,48 +197,60 @@ return (
           <span className="action-kicker">Step 2</span>
           <span className="action-title">Add Lesson</span>
           <span className="action-copy">
-            Save lesson plans and teaching notes after your classes are set up.
+            Capture your ideas, plans, and notes. Reuse what works. Improve what doesn't.
           </span>
         </button>
       </div>
 
       <div className="stats">
-        <button className="stat stat-clickable" onClick={() => setTab("logs")}>
+        <button
+          className="stat stat-clickable"
+          onClick={() => {
+            localStorage.removeItem("openNewLesson");
+            setTab("logs");
+          }}
+        >
           <div>{logs.length}</div>
-          <span>Logs</span>
-          <small>Open lessons</small>
+          <span>Lesson Plans</span>
+          <small>Your playbook-ready when you are.</small>
         </button>
 
         <button className="stat stat-clickable" onClick={() => setTab("classes")}>
           <div>{classes.length}</div>
           <span>Classes</span>
-          <small>Manage classes</small>
+          <small>See your schedule. Stay in control.</small>
         </button>
 
-        <div className="stat">
-          <div>{thisWeekCount}</div>
-          <span>Week</span>
-          <small>Lessons saved</small>
-        </div>
+        <button className="stat stat-clickable" onClick={() => setTab("library")}>
+          <div>{libraryCount}</div>
+          <span>Library</span>
+          <small>Your go-to vault for teaching gold.</small>
+        </button>
 
         {upcomingReminders.length === 0 && (
           <button
             className="stat stat-clickable hero-reminder-card"
-            onClick={() => setTab("planner")}
+            onClick={() => {
+              localStorage.setItem("openPlannerSection", "scheduled");
+              setTab("planner");
+            }}
           >
             <div>0</div>
-            <span>Upcoming Reminders</span>
-            <small>Save a lesson with reminders on and it will appear here.</small>
+          <span>Reminders</span>
+            <small>Never miss a beat again.</small>
           </button>
         )}
 
         {nextReminder && (
           <button
             className="stat stat-clickable hero-reminder-card"
-            onClick={() => setTab("planner")}
+            onClick={() => {
+              localStorage.setItem("openPlannerSection", "scheduled");
+              setTab("planner");
+            }}
           >
             <div>{upcomingReminders.length}</div>
-            <span>Upcoming Reminders</span>
+            <span>Reminders</span>
             <small>{nextReminder.title} • {formatReminderDate(nextReminder.remindAt)}</small>
           </button>
         )}
@@ -269,50 +258,32 @@ return (
     </div>
 
     <div>
-      <div className="section-head">
-        <div className="section-title">Prep Needed</div>
-        <div className="section-copy">
-          Classes without a saved lesson will show up here.
-        </div>
+      <div
+        className="card empty-card friendly-card"
+        onClick={() => {
+          localStorage.setItem("openNewLesson", "true");
+          setTab("logs");
+        }}
+      >
+        <div className="card-title">Lesson Plan Check-In</div>
+        <small>
+          Stay one step ahead of your class. Your next lesson should already be in motion. Add it now while the ideas are still hot.
+        </small>
       </div>
-
-      {upcomingPrep.length === 0 && (
-        <div className="card empty-card">
-          <div className="card-title">All classes prepared</div>
-          <small>No prep gaps right now. New classes will appear here until a lesson is saved.</small>
-        </div>
-      )}
-
-      {upcomingPrep.map((c, i) => (
-        <div
-          key={i}
-          className="card prep"
-          onClick={() => {
-            localStorage.setItem("lastUsedClass", c.name);
-            setTab("logs");
-          }}
-        >
-          <div className="card-title">⚠️ {c.name}</div>
-          <small>
-            {typeof c.day === "number" ? dayNames[c.day] : c.day} •{" "}
-            {formatTime(c.displayTime)}
-          </small>
-        </div>
-      ))}
     </div>
 
     <div>
       <div className="section-head">
-        <div className="section-title">Recent Lessons</div>
+        <div className="section-title">Latest Lesson Plans</div>
         <div className="section-copy">
-          Your latest lesson plans and teaching notes live here.
+          Your recent work, front and center. Jump back into what you've created, or head to Logs for the full history. Need resources? Your Library's got your back.
         </div>
       </div>
 
       {recentLogs.length === 0 && (
         <div className="card empty-card">
-          <div className="card-title">No lessons yet</div>
-          <small>Create your first lesson after adding a class to start building your library.</small>
+          <div className="card-title">No lesson plans yet</div>
+          <small>Add a class, then save your first lesson plan. Use Library for reusable links, notes, and teaching resources.</small>
         </div>
       )}
 
@@ -341,6 +312,16 @@ return (
           </small>
         </div>
       ))}
+
+      {libraryCount > 0 && (
+        <div
+          className="card empty-card friendly-card"
+          onClick={() => setTab("library")}
+        >
+          <div className="card-title">Need your saved resources too?</div>
+          <small>Library has {libraryCount} saved item{libraryCount === 1 ? "" : "s"} ready to open.</small>
+        </div>
+      )}
     </div>
   </div>
 
@@ -382,44 +363,50 @@ return (
     .content {
       position: relative;
       z-index: 2;
+      max-width: 760px;
+      margin: 0 auto;
     }
 
     .title {
-      font-size: 24px;
-      font-weight: 600;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
       color: var(--text);
-      margin-bottom: 0;
+      margin-bottom: 6px;
+      opacity: 0.7;
     }
 
     .subtitle {
-      font-size: 14px;
-      color: rgba(15, 23, 42, 0.74);
-      margin-top: 2px;
-      line-height: 1.45;
+      font-size: 15px;
+      color: rgba(15, 23, 42, 0.72);
+      margin-top: 4px;
+      line-height: 1.6;
+      max-width: 52ch;
     }
 
     .header {
-      margin-bottom: 18px;
+      margin-bottom: 22px;
     }
 
     .hero-panel {
       background: linear-gradient(
         145deg,
-        rgba(233, 237, 243, 0.98) 0%,
-        rgba(249, 250, 252, 0.97) 34%,
-        rgba(215, 221, 231, 0.98) 68%,
-        rgba(240, 243, 248, 0.98) 100%
+        rgba(246, 248, 252, 0.98) 0%,
+        rgba(255, 255, 255, 0.96) 34%,
+        rgba(232, 237, 245, 0.98) 68%,
+        rgba(242, 246, 251, 0.98) 100%
       );
-      border: 1px solid rgba(148, 163, 184, 0.34);
-      border-radius: 24px;
-      padding: 18px;
-      margin-bottom: 24px;
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 30px;
+      padding: 24px;
+      margin-bottom: 28px;
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.5),
-        inset 0 -1px 0 rgba(148, 163, 184, 0.16),
-        var(--shadow-soft);
+        inset 0 1px 1px rgba(255, 255, 255, 0.65),
+        inset 0 -1px 0 rgba(148, 163, 184, 0.12),
+        0 24px 60px rgba(15, 23, 42, 0.1);
     }
 
     :global(.dark) .hero-panel {
@@ -444,7 +431,7 @@ return (
     .actions {
       display: flex;
       gap: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 18px;
     }
 
     .lux-btn {
@@ -478,6 +465,8 @@ return (
       gap: 6px;
       min-height: 108px;
       text-align: left;
+      position: relative;
+      overflow: hidden;
     }
 
     .action-kicker {
@@ -502,6 +491,17 @@ return (
       max-width: 24ch;
     }
 
+    .action-card::after {
+      content: "";
+      position: absolute;
+      inset: auto -18% -38% auto;
+      width: 110px;
+      height: 110px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.22), transparent 70%);
+      pointer-events: none;
+    }
+
     .lux-btn:hover {
       transform: translateY(-3px);
       background-position: 100% 50%;
@@ -510,7 +510,7 @@ return (
     .stats {
       display: flex;
       gap: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 8px;
       align-items: stretch;
     }
 
@@ -524,15 +524,37 @@ return (
       flex-direction: column;
       justify-content: space-between;
       color: white;
-      background: linear-gradient(135deg, #27483b, #335a4c, #456e5f);
+      background: linear-gradient(135deg, #24473c, #2f5a4d, #446f61);
       box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18),
         0 6px 14px rgba(21, 45, 36, 0.2);
       border: none;
       box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat::after {
+      content: "";
+      position: absolute;
+      right: -18px;
+      bottom: -22px;
+      width: 88px;
+      height: 88px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.14), transparent 68%);
+      pointer-events: none;
+    }
+
+    .stat:nth-child(2) {
+      background: linear-gradient(135deg, #234f62, #2d6b84, #3f8097);
+    }
+
+    .stat:nth-child(3) {
+      background: linear-gradient(135deg, #5a3f1d, #7d5a2a, #9d7640);
     }
 
     .stat div {
-      font-size: 20px;
+      font-size: 22px;
       font-weight: 700;
       line-height: 1;
       margin-bottom: 4px;
@@ -570,19 +592,22 @@ return (
     }
 
     .section-head {
-      margin-bottom: 10px;
+      margin-bottom: 14px;
     }
 
     .section-title {
-      font-weight: 500;
-      margin-bottom: 2px;
+      font-size: 18px;
+      font-weight: 650;
+      margin-bottom: 4px;
       color: var(--text);
+      letter-spacing: -0.02em;
     }
 
     .section-copy {
-      font-size: 12px;
-      line-height: 1.45;
+      font-size: 13px;
+      line-height: 1.6;
       color: var(--muted);
+      max-width: 58ch;
     }
 
     small {
@@ -594,9 +619,9 @@ return (
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
 
-      border-radius: 14px;
-      padding: 14px 16px;
-      margin-bottom: 12px;
+      border-radius: 18px;
+      padding: 16px 18px;
+      margin-bottom: 14px;
 
       border: 1px solid var(--border);
 
@@ -607,10 +632,10 @@ return (
     }
 
     .card-title {
-      font-size: 15px;
-      font-weight: 600;
+      font-size: 16px;
+      font-weight: 650;
       color: var(--text);
-      margin-bottom: 2px;
+      margin-bottom: 4px;
       letter-spacing: -0.2px;
     }
 
@@ -626,8 +651,10 @@ return (
       background: var(--surface);
     }
 
-    .prep {
-      border-left: 4px solid #f59e0b;
+    .friendly-card {
+      cursor: pointer;
+      border-left: 4px solid #60a5fa;
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(255, 255, 255, 0.92));
     }
 
     .empty-card {
@@ -689,7 +716,7 @@ return (
       }
 
       .hero-panel {
-        padding: 16px;
+        padding: 18px;
       }
     }
   `}</style>

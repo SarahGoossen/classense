@@ -11,6 +11,52 @@ import Settings from "./components/Settings";
 import Classes from "./components/Classes";
 import { ClassenseCloudProvider, useClassenseCloud } from "./context/ClassenseCloud";
 
+const mobilePrimaryTabs = [
+  { key: "home", label: "Home" },
+  { key: "logs", label: "Logs" },
+  { key: "library", label: "Library" },
+] as const;
+
+const mobileSecondaryTabs = [
+  { key: "classes", label: "Classes" },
+  { key: "planner", label: "Calendar" },
+  { key: "settings", label: "Settings" },
+] as const;
+
+const desktopTabs = [
+  { key: "home", label: "Home" },
+  { key: "classes", label: "Classes" },
+  { key: "planner", label: "Calendar" },
+  { key: "logs", label: "Logs" },
+  { key: "library", label: "Library" },
+  { key: "settings", label: "Settings" },
+] as const;
+
+const FIRED_REMINDER_STORAGE_KEY = "firedReminderIds";
+
+type ReminderRecord = {
+  id: number;
+  title: string;
+  className?: string;
+  lessonDate?: string;
+  remindAt?: string;
+  type?: string;
+};
+
+const getReminderBody = (reminder: ReminderRecord) => {
+  const parts = [reminder.className, reminder.lessonDate].filter(Boolean);
+
+  if (reminder.type === "draft") {
+    return parts.length > 0
+      ? `Time to finish this lesson draft: ${parts.join(" • ")}`
+      : "Time to finish this lesson draft.";
+  }
+
+  return parts.length > 0
+    ? `Reminder for ${parts.join(" • ")}`
+    : "You have a Classense reminder.";
+};
+
 function AppShell() {
   const [activeTab, setActiveTab] = useState("home");
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
@@ -19,8 +65,20 @@ function AppShell() {
   const [signOutQuote, setSignOutQuote] = useState("");
   const { authReady, cloudEnabled, user, signingOut } = useClassenseCloud();
 
+  const renderTabButton = (tabKey: string, label: string) => (
+    <button
+      key={tabKey}
+      onClick={() => setActiveTab(tabKey)}
+      style={activeTab === tabKey ? activeTabStyle : tab}
+      onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === tabKey)}
+      onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === tabKey)}
+    >
+      {label}
+    </button>
+  );
+
   useEffect(() => {
-    const updateViewport = () => setIsMobile(window.innerWidth <= 640);
+    const updateViewport = () => setIsMobile(window.innerWidth <= 1100);
     updateViewport();
     window.addEventListener("resize", updateViewport);
     return () => window.removeEventListener("resize", updateViewport);
@@ -51,6 +109,62 @@ function AppShell() {
     const hour = new Date().getHours();
     setSignOutQuote(quotes[hour % quotes.length]);
   }, [signingOut]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+
+    const notifyDueReminders = () => {
+      if (Notification.permission !== "granted") return;
+
+      const reminders = JSON.parse(localStorage.getItem("reminders") || "[]") as ReminderRecord[];
+      const now = Date.now();
+      const firedIds = new Set<number>(
+        JSON.parse(localStorage.getItem(FIRED_REMINDER_STORAGE_KEY) || "[]")
+      );
+      const currentReminderIds = new Set(reminders.map((reminder) => reminder.id));
+      let changed = false;
+
+      Array.from(firedIds).forEach((id) => {
+        if (!currentReminderIds.has(id)) {
+          firedIds.delete(id);
+          changed = true;
+        }
+      });
+
+      reminders.forEach((reminder) => {
+        if (!reminder.remindAt || firedIds.has(reminder.id)) return;
+
+        const dueAt = new Date(reminder.remindAt).getTime();
+        if (Number.isNaN(dueAt) || dueAt > now) return;
+
+        const notification = new Notification(reminder.title || "Classense reminder", {
+          body: getReminderBody(reminder),
+          tag: `classense-reminder-${reminder.id}`,
+        });
+
+        notification.onclick = () => {
+          window.focus();
+        };
+
+        firedIds.add(reminder.id);
+        changed = true;
+      });
+
+      if (changed) {
+        localStorage.setItem(
+          FIRED_REMINDER_STORAGE_KEY,
+          JSON.stringify(Array.from(firedIds))
+        );
+      }
+    };
+
+    notifyDueReminders();
+    const interval = window.setInterval(notifyDueReminders, 30000);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, []);
 
   if (!authReady) {
     return (
@@ -129,9 +243,67 @@ function AppShell() {
         background: "var(--bg)",
         color: "var(--text)",
         transition: "background 0.25s ease, color 0.25s ease",
-        paddingBottom: "calc(12px + env(safe-area-inset-bottom))",
+        paddingBottom: isMobile ? "calc(12px + env(safe-area-inset-bottom))" : 0,
       }}
     >
+      {isMobile ? (
+        <nav
+          style={{
+            background: "var(--nav-bg)",
+            borderBottom: "1px solid var(--border-strong)",
+            display: "grid",
+            gap: 10,
+            textAlign: "center",
+            fontSize: 12,
+            position: "sticky",
+            top: 0,
+            paddingTop: 10,
+            paddingLeft: 10,
+            paddingRight: 10,
+            paddingBottom: 10,
+            boxShadow: "0 8px 20px rgba(15, 23, 42, 0.08)",
+            zIndex: 20,
+            transition: "background 0.25s ease, border-color 0.25s ease",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: 10,
+            }}
+          >
+            {mobilePrimaryTabs.map(({ key, label }) => renderTabButton(key, label))}
+          </div>
+        </nav>
+      ) : (
+        <nav
+          style={{
+            background: "var(--nav-bg)",
+            borderBottom: "1px solid var(--border-strong)",
+            display: "grid",
+            textAlign: "center",
+            fontSize: 13,
+            position: "sticky",
+            top: 0,
+            padding: "8px 18px",
+            boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
+            zIndex: 20,
+            transition: "background 0.25s ease, border-color 0.25s ease",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+              gap: 10,
+            }}
+          >
+            {desktopTabs.map(({ key, label }) => renderTabButton(key, label))}
+          </div>
+        </nav>
+      )}
+
       {activeTab === "home" && (
         <div
           style={{
@@ -191,72 +363,37 @@ function AppShell() {
         {activeTab === "settings" && <Settings />}
       </div>
 
-      <nav
-        style={{
-          background: "var(--nav-bg)",
-          borderTop: "1px solid var(--border-strong)",
-          display: "grid",
-          gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(6, 1fr)",
-          textAlign: "center",
-          fontSize: isMobile ? 12 : 13,
-          position: "sticky",
-          bottom: 0,
-          paddingTop: isMobile ? 8 : 6,
-          paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
-          boxShadow: "0 -6px 18px rgba(15, 23, 42, 0.08)",
-          zIndex: 20,
-          transition: "background 0.25s ease, border-color 0.25s ease",
-        }}
-      >
-        <button
-          onClick={() => setActiveTab("home")}
-          style={activeTab === "home" ? activeTabStyle : tab}
-          onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === "home")}
-          onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === "home")}
+      {isMobile ? (
+        <nav
+          style={{
+            background: "var(--nav-bg)",
+            borderTop: "1px solid var(--border-strong)",
+            display: "grid",
+            gap: 10,
+            textAlign: "center",
+            fontSize: 12,
+            position: "sticky",
+            bottom: 0,
+            paddingTop: 10,
+            paddingLeft: 10,
+            paddingRight: 10,
+            paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
+            boxShadow: "0 -6px 18px rgba(15, 23, 42, 0.08)",
+            zIndex: 20,
+            transition: "background 0.25s ease, border-color 0.25s ease",
+          }}
         >
-          Home
-        </button>
-        <button
-          onClick={() => setActiveTab("classes")}
-          style={activeTab === "classes" ? activeTabStyle : tab}
-          onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === "classes")}
-          onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === "classes")}
-        >
-          Classes
-        </button>
-        <button
-          onClick={() => setActiveTab("planner")}
-          style={activeTab === "planner" ? activeTabStyle : tab}
-          onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === "planner")}
-          onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === "planner")}
-        >
-          Calendar
-        </button>
-        <button
-          onClick={() => setActiveTab("logs")}
-          style={activeTab === "logs" ? activeTabStyle : tab}
-          onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === "logs")}
-          onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === "logs")}
-        >
-          Logs
-        </button>
-        <button
-          onClick={() => setActiveTab("library")}
-          style={activeTab === "library" ? activeTabStyle : tab}
-          onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === "library")}
-          onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === "library")}
-        >
-          Library
-        </button>
-        <button
-          onClick={() => setActiveTab("settings")}
-          style={activeTab === "settings" ? activeTabStyle : tab}
-          onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === "settings")}
-          onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === "settings")}
-        >
-          Settings
-        </button>
-      </nav>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: 10,
+            }}
+          >
+            {mobileSecondaryTabs.map(({ key, label }) => renderTabButton(key, label))}
+          </div>
+        </nav>
+      ) : null}
     </main>
   );
 }
@@ -270,21 +407,22 @@ export default function Page() {
 }
 
 const tab = {
-  padding: "10px 4px",
-  minHeight: "44px",
-  background: "transparent",
-  border: "none",
+  padding: "10px 8px",
+  minHeight: "42px",
+  background: "rgba(15, 23, 42, 0.08)",
+  border: "1px solid rgba(148, 163, 184, 0.18)",
   cursor: "pointer",
   color: "var(--text)",
   fontWeight: 600,
   lineHeight: 1.2,
-  borderRadius: "10px",
+  borderRadius: "999px",
   transition: "all 0.18s ease",
 };
 
 const activeTabStyle = {
   ...tab,
-  background: "rgba(37, 99, 235, 0.14)",
+  background: "linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(96, 165, 250, 0.2))",
+  border: "1px solid rgba(37, 99, 235, 0.28)",
   color: "#2563eb",
 };
 
@@ -298,6 +436,6 @@ const applyHover = (element: HTMLButtonElement, isActive: boolean) => {
 const resetHover = (element: HTMLButtonElement, isActive: boolean) => {
   element.style.transform = "none";
   element.style.background = isActive
-    ? "rgba(37, 99, 235, 0.14)"
-    : "transparent";
+    ? "linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(96, 165, 250, 0.2))"
+    : "rgba(15, 23, 42, 0.08)";
 };

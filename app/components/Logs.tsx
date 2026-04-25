@@ -1,7 +1,35 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { calculateReminderTime } from "../utils/reminders";
+
+declare global {
+  interface Window {
+    SpeechRecognition?: new () => SpeechRecognition;
+    webkitSpeechRecognition?: new () => SpeechRecognition;
+  }
+}
+
+type SpeechRecognition = {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: (() => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+};
+
+type SpeechRecognitionEventLike = {
+  resultIndex: number;
+  results: ArrayLike<{
+    0: {
+      transcript: string;
+    };
+    isFinal: boolean;
+  }>;
+};
 
 type ClassItem = { name: string; time?: string };
 
@@ -48,6 +76,31 @@ const getStoredRemindersEnabled = () => {
   return value === null ? true : value === "true";
 };
 
+const getFollowUpReminderDate = (option: string, customValue: string) => {
+  const now = new Date();
+
+  if (option === "custom") {
+    const customDate = new Date(customValue);
+    return isNaN(customDate.getTime()) ? null : customDate;
+  }
+
+  if (option === "tomorrow") {
+    const reminder = new Date(now);
+    reminder.setDate(reminder.getDate() + 1);
+    reminder.setHours(9, 0, 0, 0);
+    return reminder;
+  }
+
+  const laterToday = new Date(now);
+  laterToday.setHours(18, 0, 0, 0);
+
+  if (laterToday.getTime() <= now.getTime()) {
+    laterToday.setTime(now.getTime() + 2 * 60 * 60 * 1000);
+  }
+
+  return laterToday;
+};
+
 export default function Logs() {
   const [isMobile, setIsMobile] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -72,6 +125,12 @@ export default function Logs() {
   const [message, setMessage] = useState("");
   const [enablePrepReminder, setEnablePrepReminder] = useState(true);
   const [prepReminderTime, setPrepReminderTime] = useState("2h");
+  const [isDictating, setIsDictating] = useState(false);
+  const [enableFollowUpReminder, setEnableFollowUpReminder] = useState(false);
+  const [followUpReminderOption, setFollowUpReminderOption] = useState("later_today");
+  const [followUpReminderCustomAt, setFollowUpReminderCustomAt] = useState("");
+  const [draftReminderId, setDraftReminderId] = useState<number | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   const today = () => new Date().toISOString().split("T")[0];
 
@@ -79,6 +138,12 @@ export default function Logs() {
     setMessage(text);
     window.setTimeout(() => setMessage(""), 2000);
   };
+
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, []);
 
   useEffect(() => {
     const savedClasses = localStorage.getItem("classes");
@@ -122,6 +187,27 @@ export default function Logs() {
       }
       localStorage.removeItem("editLogId");
     }
+
+    if (localStorage.getItem("openNewLesson") === "true") {
+      setSelectedClass(lastClass || "");
+      setLessonTime(getClassTime(lastClass || ""));
+      setTitle("");
+      setDate(today());
+      setContent("");
+      setTags([]);
+      setTagInput("");
+      setReferences("");
+      setEditingId(null);
+      setSelectedLog(null);
+      setIsEditor(true);
+      setEnablePrepReminder(getStoredPrepReminder());
+      setPrepReminderTime(getStoredPrepTime());
+      setEnableFollowUpReminder(false);
+      setFollowUpReminderOption("later_today");
+      setFollowUpReminderCustomAt("");
+      setDraftReminderId(null);
+      localStorage.removeItem("openNewLesson");
+    }
   }, []);
 
   useEffect(() => {
@@ -162,6 +248,10 @@ export default function Logs() {
     setEditingId(null);
     setEnablePrepReminder(getStoredPrepReminder());
     setPrepReminderTime(getStoredPrepTime());
+    setEnableFollowUpReminder(false);
+    setFollowUpReminderOption("later_today");
+    setFollowUpReminderCustomAt("");
+    setDraftReminderId(null);
   };
 
   const handleNewLesson = () => {
@@ -402,6 +492,108 @@ export default function Logs() {
     showMessage("AI draft added ✓");
   };
 
+  const handleDictationToggle = () => {
+    if (typeof window === "undefined") return;
+
+    if (isDictating) {
+      recognitionRef.current?.stop();
+      setIsDictating(false);
+      showMessage("Dictation stopped");
+      return;
+    }
+
+    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!Recognition) {
+      showMessage("Voice dictation is not supported in this browser");
+      return;
+    }
+
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        if (result.isFinal) {
+          transcript += `${result[0].transcript.trim()} `;
+        }
+      }
+
+      if (!transcript.trim()) return;
+
+      setContent((prev) => {
+        const trimmed = prev.trimEnd();
+        return `${trimmed}${trimmed ? "\n" : ""}${transcript.trim()}`;
+      });
+    };
+
+    recognition.onerror = () => {
+      setIsDictating(false);
+      showMessage("Dictation could not start");
+    };
+
+    recognition.onend = () => {
+      setIsDictating(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+    setIsDictating(true);
+    showMessage("Dictation started");
+  };
+
+  const handleEditorClose = () => {
+    const hasPartialDraft = Boolean(
+      selectedClass || title.trim() || content.trim() || references.trim() || tags.length
+    );
+
+    const existingReminders = JSON.parse(localStorage.getItem("reminders") || "[]");
+
+    const followUpReminderAt = getFollowUpReminderDate(
+      followUpReminderOption,
+      followUpReminderCustomAt
+    );
+
+    if (enableFollowUpReminder && followUpReminderOption === "custom" && !followUpReminderAt) {
+      showMessage("Pick a custom follow-up time before closing this lesson");
+      return;
+    }
+
+    if (enableFollowUpReminder && followUpReminderAt && hasPartialDraft) {
+      const reminderId = draftReminderId ?? Date.now();
+      const draftReminder = {
+        id: reminderId,
+        title: title.trim() || "Finish lesson plan",
+        className: selectedClass || "Unassigned lesson",
+        lessonDate: date || "",
+        classTime: lessonTime || "",
+        remindAt: followUpReminderAt.toISOString(),
+        type: "draft",
+      };
+
+      localStorage.setItem(
+        "reminders",
+        JSON.stringify([
+          draftReminder,
+          ...existingReminders.filter((reminder: any) => reminder.id !== reminderId),
+        ])
+      );
+      setDraftReminderId(reminderId);
+      showMessage("Reminder saved for this unfinished lesson");
+    } else if (draftReminderId) {
+      localStorage.setItem(
+        "reminders",
+        JSON.stringify(existingReminders.filter((reminder: any) => reminder.id !== draftReminderId))
+      );
+    }
+
+    setIsEditor(false);
+  };
+
   const handleSave = () => {
     if (!selectedClass || !title || !date || !content.trim()) {
       showMessage("Class, date, title, and lesson plan are required");
@@ -431,6 +623,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
     const remindersEnabled = getStoredRemindersEnabled();
     const existing = JSON.parse(localStorage.getItem("reminders") || "[]");
+    const withoutDraftReminder = existing.filter((reminder: any) => reminder.id !== draftReminderId);
 
     if (remindersEnabled && enablePrepReminder) {
       const fullDateTime = date && classTime
@@ -465,17 +658,18 @@ const classTime = lessonTime || getClassTime(selectedClass);
         "reminders",
         JSON.stringify([
           newReminder,
-          ...existing.filter((reminder: any) => reminder.logId !== payload.id),
+          ...withoutDraftReminder.filter((reminder: any) => reminder.logId !== payload.id),
         ])
       );
     } else {
       localStorage.setItem(
         "reminders",
-        JSON.stringify(existing.filter((reminder: any) => reminder.logId !== payload.id))
+        JSON.stringify(withoutDraftReminder.filter((reminder: any) => reminder.logId !== payload.id))
       );
     }
 
     setIsEditor(false);
+    setDraftReminderId(null);
     setSelectedLog(payload);
     showMessage("Saved ✓");
   };
@@ -686,15 +880,18 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
   const reminderCardStyle: React.CSSProperties = {
     ...cardStyle,
-    background: "linear-gradient(145deg, rgba(37,99,235,0.08), var(--ghost-bg))",
-    border: "1px solid rgba(59,130,246,0.16)",
+    background:
+      "linear-gradient(145deg, rgba(248,250,255,0.96), rgba(235,242,255,0.94) 48%, rgba(245,248,255,0.96))",
+    border: "1px solid rgba(59,130,246,0.14)",
+    borderRadius: 18,
+    boxShadow: "0 16px 34px rgba(37,99,235,0.08), inset 0 1px 0 rgba(255,255,255,0.5)",
   };
 
   const reminderToggleStyle: React.CSSProperties = {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
+    alignItems: "flex-start",
+    gap: 16,
   };
 
   const reminderPreview = (() => {
@@ -742,6 +939,32 @@ const classTime = lessonTime || getClassTime(selectedClass);
     pointerEvents: "none",
   };
 
+  const textAreaWrapStyle: React.CSSProperties = {
+    position: "relative",
+  };
+
+  const lessonPlanTextAreaStyle: React.CSSProperties = {
+    minHeight: "40vh",
+    resize: "vertical",
+    paddingBottom: 64,
+  };
+
+  const micButtonStyle: React.CSSProperties = {
+    position: "absolute",
+    right: 14,
+    bottom: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    border: "1px solid rgba(148,163,184,0.24)",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    cursor: "pointer",
+    boxShadow: "0 10px 18px rgba(15,23,42,0.24)",
+  };
+
   const reminderPreviewStyle: React.CSSProperties = {
     fontSize: 13,
     color: "var(--muted)",
@@ -751,25 +974,47 @@ const classTime = lessonTime || getClassTime(selectedClass);
     border: "1px solid rgba(59,130,246,0.14)",
   };
 
+  const reminderDividerStyle: React.CSSProperties = {
+    height: 1,
+    background: "rgba(148,163,184,0.16)",
+  };
+
+  const followUpReminderPreview = (() => {
+    const reminderAt = getFollowUpReminderDate(
+      followUpReminderOption,
+      followUpReminderCustomAt
+    );
+
+    if (!reminderAt) return "";
+
+    return reminderAt.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  })();
+
   if (isEditor) {
     return (
       <div style={shellStyle}>
         <Toast />
         <div style={{ maxWidth: "100%", margin: "0 auto", padding: isMobile ? "8px 0 16px" : "16px" }}>
-          <div
-            style={{
-              background: "var(--surface-soft)",
-              backdropFilter: "blur(6px)",
-              WebkitBackdropFilter: "blur(6px)",
-              borderRadius: "16px",
-              padding: isMobile ? "16px" : "18px",
-              border: "1px solid var(--border)",
-              boxShadow:
-                "0 10px 30px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)",
-            }}
-          >
+            <div
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(246,249,255,0.94))",
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+                borderRadius: "24px",
+                padding: isMobile ? "18px" : "24px",
+                border: "1px solid rgba(148,163,184,0.18)",
+                boxShadow:
+                  "0 24px 50px rgba(15,23,42,0.1), 0 1px 2px rgba(0,0,0,0.04)",
+              }}
+            >
             <div style={{ marginBottom: 14, display: "flex", justifyContent: "flex-end" }}>
-              <button onClick={() => setIsEditor(false)} style={whiteBtn}>
+              <button onClick={handleEditorClose} style={whiteBtn}>
                 ← Back
               </button>
             </div>
@@ -788,7 +1033,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
                 color: "var(--muted)",
               }}
             >
-                Create. Keep track of lessons, timing, and ideas worth reusing.
+                Turn your ideas into lessons you can run with confidence.
               </div>
             </div>
   
@@ -807,7 +1052,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
                       }}
                       style={editorClassField}
                     >
-                      <option value="">Select Class</option>
+                      <option value="">Select class</option>
                       {classes.map((c, i) => (
                         <option key={`${c.name}-${i}`} value={c.name}>
                           {c.name}
@@ -845,34 +1090,70 @@ const classTime = lessonTime || getClassTime(selectedClass);
               </div>
   
               <input
-                placeholder="Lesson Title"
+                placeholder="Lesson title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={inputStyle}
               />
-  
-              <textarea
-                placeholder="Lesson Plan"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                style={{ ...inputStyle, minHeight: "40vh", resize: "vertical" }}
-              />
+
+              <div style={textAreaWrapStyle}>
+                <textarea
+                  placeholder="Lesson plan"
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  style={{ ...inputStyle, ...lessonPlanTextAreaStyle }}
+                />
+                <button
+                  aria-label={isDictating ? "Stop voice dictation" : "Start voice dictation"}
+                  onClick={handleDictationToggle}
+                  style={{
+                    ...micButtonStyle,
+                    background: isDictating
+                      ? "linear-gradient(135deg, rgba(37,99,235,0.28), rgba(96,165,250,0.26))"
+                      : "rgba(15, 23, 42, 0.8)",
+                  }}
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    style={{ width: 18, height: 18 }}
+                  >
+                    <path
+                      d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zm5 9a5 5 0 01-10 0H5a7 7 0 0014 0zm-4 8h-2v-3.08A7.03 7.03 0 0112 17a7.03 7.03 0 011 .92z"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+              </div>
 
               <div style={reminderCardStyle}>
-                <div style={{ ...editorSectionLabel, marginBottom: 10 }}>Reminder</div>
+                <div style={{ ...editorSectionLabel, marginBottom: 10 }}>Smart Reminders</div>
+                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14, color: "var(--text)" }}>
+                  Stay prepared before class and finish what's left after.
+                </div>
                 <div style={reminderToggleStyle}>
-                    <div>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Prep reminder</div>
-                      <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
-                        Create a reminder before this lesson so prep is not missed.
-                      </div>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Before Class Reminder</div>
+                    <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
+                      Get a heads-up before class starts.
+                    </div>
                   </div>
                   <button
                     onClick={() => setEnablePrepReminder((current) => !current)}
                     style={{
                       ...whiteBtn,
-                      minWidth: 72,
-                      background: enablePrepReminder ? "rgba(59,130,246,0.18)" : "var(--surface)",
+                      minWidth: 78,
+                      borderRadius: 999,
+                      border: enablePrepReminder
+                        ? "1px solid rgba(59,130,246,0.22)"
+                        : "1px solid var(--border-strong)",
+                      background: enablePrepReminder
+                        ? "linear-gradient(135deg, rgba(37,99,235,0.18), rgba(96,165,250,0.2))"
+                        : "rgba(255,255,255,0.82)",
+                      boxShadow: enablePrepReminder
+                        ? "0 8px 18px rgba(37,99,235,0.12)"
+                        : "none",
                     }}
                   >
                     {enablePrepReminder ? "On" : "Off"}
@@ -900,6 +1181,65 @@ const classTime = lessonTime || getClassTime(selectedClass);
                         Reminder will fire around {reminderPreview}.
                       </div>
                     )}
+                  </div>
+                )}
+
+                <div style={{ ...reminderDividerStyle, marginTop: 12 }} />
+
+                <div style={reminderToggleStyle}>
+                  <div>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Follow-Up Reminder</div>
+                    <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
+                      Get reminded if this lesson still needs work.
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setEnableFollowUpReminder((current) => !current)}
+                    style={{
+                      ...whiteBtn,
+                      minWidth: 78,
+                      borderRadius: 999,
+                      border: enableFollowUpReminder
+                        ? "1px solid rgba(59,130,246,0.22)"
+                        : "1px solid var(--border-strong)",
+                      background: enableFollowUpReminder
+                        ? "linear-gradient(135deg, rgba(37,99,235,0.18), rgba(96,165,250,0.2))"
+                        : "rgba(255,255,255,0.82)",
+                      boxShadow: enableFollowUpReminder
+                        ? "0 8px 18px rgba(37,99,235,0.12)"
+                        : "none",
+                    }}
+                  >
+                    {enableFollowUpReminder ? "On" : "Off"}
+                  </button>
+                </div>
+
+                {enableFollowUpReminder && (
+                  <div style={{ display: "grid", gap: 10, marginTop: 12 }}>
+                    <select
+                      value={followUpReminderOption}
+                      onChange={(e) => setFollowUpReminderOption(e.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="later_today">Later today</option>
+                      <option value="tomorrow">Tomorrow</option>
+                      <option value="custom">Custom</option>
+                    </select>
+
+                    {followUpReminderOption === "custom" && (
+                      <input
+                        type="datetime-local"
+                        value={followUpReminderCustomAt}
+                        onChange={(e) => setFollowUpReminderCustomAt(e.target.value)}
+                        style={inputStyle}
+                      />
+                    )}
+
+                    <div style={reminderPreviewStyle}>
+                      {followUpReminderPreview
+                        ? `We'll remind you around ${followUpReminderPreview}.`
+                        : "Pick a custom time for your follow-up reminder."}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1162,7 +1502,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
             color: "var(--page-subtitle)",
           }}
         >
-          Where your curriculum, lessons, and ideas take shape.
+          Turn your ideas into lessons you can run with confidence.
         </div>
       </div>
   
