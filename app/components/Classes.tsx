@@ -302,7 +302,7 @@ const inputCard = {
   display: "flex",
   flexDirection: "column",
   gap: 10,
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(246,249,255,0.94))",
+  background: "var(--premium-panel)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(148,163,184,0.18)",
   padding: 16,
@@ -375,7 +375,7 @@ const btn = {
 };
 
 const card = {
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  background: "var(--premium-panel)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(148,163,184,0.16)",
   borderRadius: 18,
@@ -414,7 +414,7 @@ const actions = {
 
 const editBtn = {
   color: "var(--text)",
-  background: "rgba(255,255,255,0.84)",
+  background: "var(--edit-surface)",
   border: "1px solid var(--border)",
   cursor: "pointer",
   fontSize: 14,

@@ -779,19 +779,20 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
   const tagStyle: React.CSSProperties = {
     display: "inline-block",
-    background: "var(--ghost-bg)",
+    background: "var(--tag-surface)",
     padding: "4px 8px",
     borderRadius: 8,
     fontSize: 12,
     cursor: "pointer",
-    color: "var(--text)",
+    color: "var(--tag-text)",
+    border: "1px solid var(--info-soft-border)",
   };
 
   const activeTagStyle: React.CSSProperties = {
     ...tagStyle,
-    background: "rgba(59,130,246,0.18)",
-    border: "1px solid rgba(59,130,246,0.3)",
-    color: "var(--text)",
+    background: "var(--bubble-blue-bg)",
+    border: "1px solid var(--bubble-blue-border)",
+    color: "var(--bubble-blue-text)",
   };
 
   const shellStyle: React.CSSProperties = {
@@ -880,8 +881,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
   const reminderCardStyle: React.CSSProperties = {
     ...cardStyle,
-    background:
-      "linear-gradient(145deg, rgba(248,250,255,0.96), rgba(235,242,255,0.94) 48%, rgba(245,248,255,0.96))",
+    background: "var(--premium-panel-strong)",
     border: "1px solid rgba(59,130,246,0.14)",
     borderRadius: 18,
     boxShadow: "0 16px 34px rgba(37,99,235,0.08), inset 0 1px 0 rgba(255,255,255,0.5)",
@@ -970,8 +970,8 @@ const classTime = lessonTime || getClassTime(selectedClass);
     color: "var(--muted)",
     padding: "10px 12px",
     borderRadius: 10,
-    background: "rgba(59,130,246,0.08)",
-    border: "1px solid rgba(59,130,246,0.14)",
+    background: "var(--info-soft)",
+    border: "1px solid var(--info-soft-border)",
   };
 
   const reminderDividerStyle: React.CSSProperties = {
@@ -1003,7 +1003,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
             <div
               style={{
                 background:
-                  "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(246,249,255,0.94))",
+                  "var(--premium-panel)",
                 backdropFilter: "blur(6px)",
                 WebkitBackdropFilter: "blur(6px)",
                 borderRadius: "24px",

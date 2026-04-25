@@ -711,7 +711,7 @@ const dateInputInner = {
 };
 
 const card = {
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  background: "var(--premium-panel)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(148,163,184,0.16)",
   borderRadius: 20,
@@ -721,7 +721,7 @@ const card = {
 };
 
 const reminderCard = {
-  background: "linear-gradient(145deg, rgba(248,250,255,0.96), rgba(235,242,255,0.94) 48%, rgba(245,248,255,0.96))",
+  background: "var(--premium-panel-strong)",
   border: "1px solid rgba(59,130,246,0.16)",
   borderRadius: 18,
   padding: 12,
@@ -750,8 +750,8 @@ const reminderPreviewStyle = {
   color: "var(--muted)",
   padding: "10px 12px",
   borderRadius: 10,
-  background: "rgba(59,130,246,0.08)",
-  border: "1px solid rgba(59,130,246,0.14)",
+  background: "var(--info-soft)",
+  border: "1px solid var(--info-soft-border)",
 };
 
 const formHeader = {
@@ -923,7 +923,7 @@ const eventCard = {
   marginTop: 8,
   padding: 14,
   borderRadius: 16,
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  background: "var(--premium-panel)",
   border: "1px solid rgba(148,163,184,0.16)",
   transition: "all 0.2s ease",
   boxShadow: "0 14px 28px rgba(15,23,42,0.07)",
@@ -946,9 +946,9 @@ const eventCardTitle = {
 const eventDateBadge = {
   fontSize: 12,
   fontWeight: 600,
-  color: "var(--muted)",
-  background: "rgba(148, 163, 184, 0.12)",
-  border: "1px solid var(--border)",
+  color: "var(--tag-text)",
+  background: "var(--tag-surface)",
+  border: "1px solid var(--info-soft-border)",
   borderRadius: 999,
   padding: "4px 8px",
   whiteSpace: "nowrap" as const,
@@ -970,10 +970,10 @@ const actions = {
 const editBtn = {
   minWidth: 72,
   minHeight: 36,
-  background: "rgba(255,255,255,0.84)",
+  background: "var(--edit-surface)",
   border: "1px solid var(--border-strong)",
   borderRadius: 10,
-  color: "#2563eb",
+  color: "var(--tag-text)",
   cursor: "pointer",
   fontWeight: 500,
 };

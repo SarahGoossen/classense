@@ -412,12 +412,12 @@ return (
     :global(.dark) .hero-panel {
       background: linear-gradient(
         145deg,
-        rgba(83, 66, 120, 0.94) 0%,
-        rgba(68, 57, 101, 0.92) 40%,
-        rgba(54, 60, 102, 0.92) 72%,
-        rgba(74, 63, 108, 0.94) 100%
+        rgba(15, 25, 42, 0.96) 0%,
+        rgba(13, 23, 39, 0.95) 42%,
+        rgba(11, 20, 35, 0.95) 74%,
+        rgba(16, 27, 45, 0.96) 100%
       );
-      border: 1px solid rgba(196, 181, 253, 0.22);
+      border: 1px solid rgba(96, 165, 250, 0.18);
       box-shadow:
         inset 0 1px 1px rgba(255, 255, 255, 0.08),
         inset 0 -1px 0 rgba(15, 23, 42, 0.2),
@@ -654,7 +654,7 @@ return (
     .friendly-card {
       cursor: pointer;
       border-left: 4px solid #60a5fa;
-      background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(255, 255, 255, 0.92));
+      background: var(--friendly-surface);
     }
 
     .empty-card {

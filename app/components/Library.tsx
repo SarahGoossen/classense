@@ -284,7 +284,7 @@ const subtitle = {
 };
 
 const card = {
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  background: "var(--premium-panel)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(148,163,184,0.16)",
   padding: 18,
@@ -357,7 +357,7 @@ const btn = {
 };
 
 const itemCard = {
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  background: "var(--premium-panel)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(148,163,184,0.16)",
   borderRadius: 18,
@@ -401,12 +401,12 @@ const itemTitle = {
 
 const tag = {
   display: "inline-block",
-  background: "rgba(37,99,235,0.1)",
+  background: "var(--tag-surface)",
   padding: "5px 10px",
   borderRadius: 999,
   fontSize: 12,
   whiteSpace: "nowrap",
-  color: "#1d4ed8",
+  color: "var(--tag-text)",
 };
 
 const linkStyle = {
@@ -434,7 +434,7 @@ const editBtn = {
   minWidth: 72,
   minHeight: 36,
   color: "var(--text)",
-  background: "rgba(255,255,255,0.84)",
+  background: "var(--edit-surface)",
   border: "1px solid var(--border-strong)",
   borderRadius: 10,
   cursor: "pointer",

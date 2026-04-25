@@ -317,10 +317,10 @@ export default function Settings() {
         <div style={card}>
           <div style={sectionKicker}>Account</div>
           <div style={sectionTitle}>Classense Cloud</div>
-          <div style={helper}>
+          <div style={statusBlueBubble}>
             {user?.email ? `Signed in as ${user.email}.` : "No account connected."}
           </div>
-          <div style={helper}>{syncStatus}</div>
+          <div style={statusTealBubble}>{syncStatus}</div>
           {user && (
             <button
               onClick={() => void signOut()}
@@ -444,7 +444,7 @@ export default function Settings() {
         <div style={helper}>
           Turn on push for this browser, then test the connection. Once VAPID keys and subscription storage are configured in production, this becomes the base for real deployed notifications.
         </div>
-        <div style={helper}>{notificationStatus}</div>
+        <div style={statusAmberBubble}>{notificationStatus}</div>
 
         <button
           style={secondaryBtn}
@@ -585,7 +585,7 @@ function Toggle({ label, value, setValue, mobile = false }) {
           onClick={() => setValue(!value)}
           style={{
             ...toggleTrack,
-            background: value ? "#2563eb" : "#d1d5db",
+            background: value ? "#2563eb" : "var(--toggle-off-bg)",
           }}
         >
           <div
@@ -634,7 +634,7 @@ const subtitle = {
 };
 
 const card = {
-  background: "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(247,249,252,0.94))",
+  background: "var(--premium-panel)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(148,163,184,0.16)",
   borderRadius: 20,
@@ -678,6 +678,35 @@ const helper = {
   color: "var(--muted)",
 };
 
+const bubbleBase = {
+  fontSize: 13,
+  lineHeight: 1.45,
+  padding: "10px 12px",
+  borderRadius: 14,
+  border: "1px solid transparent",
+};
+
+const statusBlueBubble = {
+  ...bubbleBase,
+  background: "var(--bubble-blue-bg)",
+  borderColor: "var(--bubble-blue-border)",
+  color: "var(--bubble-blue-text)",
+};
+
+const statusTealBubble = {
+  ...bubbleBase,
+  background: "var(--bubble-teal-bg)",
+  borderColor: "var(--bubble-teal-border)",
+  color: "var(--bubble-teal-text)",
+};
+
+const statusAmberBubble = {
+  ...bubbleBase,
+  background: "var(--bubble-amber-bg)",
+  borderColor: "var(--bubble-amber-border)",
+  color: "var(--bubble-amber-text)",
+};
+
 const primaryBtn = {
   width: "100%",
   padding: 14,
@@ -693,8 +722,8 @@ const secondaryBtn = {
   width: "100%",
   padding: 12,
   borderRadius: 12,
-  background: "rgba(255,255,255,0.84)",
-  border: "1px solid var(--border)",
+  background: "var(--secondary-surface)",
+  border: "1px solid var(--secondary-surface-border)",
   cursor: "pointer",
   transition: "all 0.2s ease",
   color: "var(--text)",
