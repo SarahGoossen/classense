@@ -32,6 +32,9 @@ const desktopTabs = [
   { key: "settings", label: "Settings" },
 ] as const;
 
+const MOBILE_TOP_NAV_HEIGHT = 72;
+const MOBILE_BOTTOM_NAV_HEIGHT = 76;
+
 const FIRED_REMINDER_STORAGE_KEY = "firedReminderIds";
 
 type ReminderRecord = {
@@ -243,7 +246,10 @@ function AppShell() {
         background: "var(--bg)",
         color: "var(--text)",
         transition: "background 0.25s ease, color 0.25s ease",
-        paddingBottom: isMobile ? "calc(12px + env(safe-area-inset-bottom))" : 0,
+        paddingTop: isMobile ? `calc(${MOBILE_TOP_NAV_HEIGHT}px + env(safe-area-inset-top))` : 0,
+        paddingBottom: isMobile
+          ? `calc(${MOBILE_BOTTOM_NAV_HEIGHT}px + env(safe-area-inset-bottom))`
+          : 0,
       }}
     >
       {isMobile ? (
@@ -255,8 +261,10 @@ function AppShell() {
             gap: 10,
             textAlign: "center",
             fontSize: 12,
-            position: "sticky",
+            position: "fixed",
             top: 0,
+            left: 0,
+            right: 0,
             paddingTop: 10,
             paddingLeft: 10,
             paddingRight: 10,
@@ -372,8 +380,10 @@ function AppShell() {
             gap: 10,
             textAlign: "center",
             fontSize: 12,
-            position: "sticky",
+            position: "fixed",
             bottom: 0,
+            left: 0,
+            right: 0,
             paddingTop: 10,
             paddingLeft: 10,
             paddingRight: 10,
