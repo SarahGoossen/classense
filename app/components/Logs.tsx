@@ -15,7 +15,7 @@ type SpeechRecognition = {
   interimResults: boolean;
   lang: string;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event?: SpeechRecognitionErrorLike) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -29,6 +29,10 @@ type SpeechRecognitionEventLike = {
     };
     isFinal: boolean;
   }>;
+};
+
+type SpeechRecognitionErrorLike = {
+  error?: string;
 };
 
 type ClassItem = { name: string; time?: string };
@@ -126,11 +130,13 @@ export default function Logs() {
   const [enablePrepReminder, setEnablePrepReminder] = useState(true);
   const [prepReminderTime, setPrepReminderTime] = useState("2h");
   const [isDictating, setIsDictating] = useState(false);
+  const [dictationPreview, setDictationPreview] = useState("");
   const [enableFollowUpReminder, setEnableFollowUpReminder] = useState(false);
   const [followUpReminderOption, setFollowUpReminderOption] = useState("later_today");
   const [followUpReminderCustomAt, setFollowUpReminderCustomAt] = useState("");
   const [draftReminderId, setDraftReminderId] = useState<number | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const dictationBufferRef = useRef("");
 
   const today = () => new Date().toISOString().split("T")[0];
 
@@ -492,10 +498,37 @@ export default function Logs() {
     showMessage("AI draft added ✓");
   };
 
+  const normalizeDictationText = (value: string) => {
+    const cleaned = value
+      .replace(/\s+/g, " ")
+      .replace(/\s+([,.!?;:])/g, "$1")
+      .replace(/\bi\b/g, "I")
+      .trim();
+
+    if (!cleaned) return "";
+
+    const withCapital = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+    return /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
+  };
+
+  const commitDictation = () => {
+    const finalText = normalizeDictationText(dictationBufferRef.current);
+    dictationBufferRef.current = "";
+    setDictationPreview("");
+
+    if (!finalText) return;
+
+    setContent((prev) => {
+      const trimmed = prev.trimEnd();
+      return `${trimmed}${trimmed ? "\n\n" : ""}${finalText}`;
+    });
+  };
+
   const handleDictationToggle = () => {
     if (typeof window === "undefined") return;
 
     if (isDictating) {
+      recognitionRef.current?.stop();
       return;
     }
 
@@ -506,38 +539,52 @@ export default function Logs() {
     }
 
     const recognition = new Recognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = "en-US";
 
     recognition.onresult = (event) => {
-      let transcript = "";
+      let finalTranscript = "";
+      let liveTranscript = "";
 
       for (let index = event.resultIndex; index < event.results.length; index += 1) {
         const result = event.results[index];
         if (result.isFinal) {
-          transcript += `${result[0].transcript.trim()} `;
+          finalTranscript += `${result[0].transcript.trim()} `;
+        } else {
+          liveTranscript += `${result[0].transcript.trim()} `;
         }
       }
 
-      if (!transcript.trim()) return;
+      if (finalTranscript.trim()) {
+        dictationBufferRef.current = `${dictationBufferRef.current} ${finalTranscript}`.trim();
+      }
 
-      setContent((prev) => {
-        const trimmed = prev.trimEnd();
-        return `${trimmed}${trimmed ? "\n" : ""}${transcript.trim()}`;
-      });
+      setDictationPreview(
+        [dictationBufferRef.current, liveTranscript.trim()].filter(Boolean).join(" ")
+      );
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event?: SpeechRecognitionErrorLike) => {
+      if (event?.error === "not-allowed") {
+        showMessage("Microphone access is blocked in this browser");
+      } else if (event?.error === "no-speech") {
+        showMessage("No speech was detected. Try again and speak a little closer.");
+      }
+      setDictationPreview("");
       setIsDictating(false);
     };
 
     recognition.onend = () => {
+      commitDictation();
+      recognitionRef.current = null;
       setIsDictating(false);
     };
 
     recognitionRef.current = recognition;
     recognition.start();
+    dictationBufferRef.current = "";
+    setDictationPreview("");
     setIsDictating(true);
   };
 
@@ -950,16 +997,39 @@ const classTime = lessonTime || getClassTime(selectedClass);
     position: "absolute",
     right: 14,
     bottom: 14,
-    width: 44,
-    height: 44,
+    minWidth: 124,
+    height: 48,
+    padding: "0 14px",
     borderRadius: 999,
     border: "1px solid rgba(148,163,184,0.24)",
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
+    gap: 10,
     color: "#fff",
     cursor: "pointer",
     boxShadow: "0 10px 18px rgba(15,23,42,0.24)",
+  };
+
+  const dictationIndicatorStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 4px)",
+    alignItems: "end",
+    gap: 3,
+    height: 16,
+  };
+
+  const dictationHintStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    lineHeight: 1.45,
+    color: isDictating ? "var(--bubble-blue-text)" : "var(--muted)",
+    marginTop: 10,
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: isDictating ? "var(--bubble-blue-bg)" : "var(--surface-soft)",
+    border: isDictating
+      ? "1px solid var(--bubble-blue-border)"
+      : "1px solid var(--border)",
   };
 
   const reminderPreviewStyle: React.CSSProperties = {
@@ -1101,12 +1171,19 @@ const classTime = lessonTime || getClassTime(selectedClass);
                   style={{ ...inputStyle, ...lessonPlanTextAreaStyle }}
                 />
                 <button
-                  aria-label="Use voice dictation"
+                  aria-label={isDictating ? "Stop voice dictation" : "Start voice dictation"}
                   onClick={handleDictationToggle}
                   style={{
                     ...micButtonStyle,
-                    background: "rgba(15, 23, 42, 0.8)",
-                    opacity: isDictating ? 0.82 : 1,
+                    background: isDictating
+                      ? "linear-gradient(135deg, rgba(14,165,233,0.96), rgba(37,99,235,0.96))"
+                      : "rgba(15, 23, 42, 0.86)",
+                    border: isDictating
+                      ? "1px solid rgba(191,219,254,0.7)"
+                      : "1px solid rgba(148,163,184,0.24)",
+                    boxShadow: isDictating
+                      ? "0 14px 24px rgba(37,99,235,0.3)"
+                      : micButtonStyle.boxShadow,
                   }}
                   type="button"
                 >
@@ -1120,7 +1197,31 @@ const classTime = lessonTime || getClassTime(selectedClass);
                       fill="currentColor"
                     />
                   </svg>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" }}>
+                    {isDictating ? "Stop" : "Speak"}
+                  </span>
+                  {isDictating && (
+                    <span aria-hidden="true" style={dictationIndicatorStyle}>
+                      {[0, 1, 2].map((bar) => (
+                        <span
+                          key={bar}
+                          style={{
+                            width: 4,
+                            borderRadius: 999,
+                            background: "rgba(255,255,255,0.95)",
+                            animation: `dictationPulse 0.9s ${bar * 0.14}s ease-in-out infinite`,
+                            height: `${10 + bar * 3}px`,
+                          }}
+                        />
+                      ))}
+                    </span>
+                  )}
                 </button>
+              </div>
+              <div style={dictationHintStyle}>
+                {isDictating
+                  ? dictationPreview || "Listening now. Tap Stop when you're done speaking."
+                  : "Tap Speak to dictate your lesson plan, then Stop to place it into the lesson."}
               </div>
 
               <div style={reminderCardStyle}>
@@ -1479,6 +1580,19 @@ const classTime = lessonTime || getClassTime(selectedClass);
   return (
     <div style={shellStyle}>
       <Toast />
+      <style jsx global>{`
+        @keyframes dictationPulse {
+          0%,
+          100% {
+            transform: scaleY(0.55);
+            opacity: 0.68;
+          }
+          50% {
+            transform: scaleY(1.1);
+            opacity: 1;
+          }
+        }
+      `}</style>
   
       <div
         style={{

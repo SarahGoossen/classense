@@ -68,17 +68,21 @@ function AppShell() {
   const [signOutQuote, setSignOutQuote] = useState("");
   const { authReady, cloudEnabled, user, signingOut } = useClassenseCloud();
 
-  const renderTabButton = (tabKey: string, label: string) => (
-    <button
-      key={tabKey}
-      onClick={() => setActiveTab(tabKey)}
-      style={activeTab === tabKey ? activeTabStyle : tab}
-      onMouseEnter={(e) => applyHover(e.currentTarget, activeTab === tabKey)}
-      onMouseLeave={(e) => resetHover(e.currentTarget, activeTab === tabKey)}
-    >
-      {label}
-    </button>
-  );
+  const renderTabButton = (tabKey: string, label: string) => {
+    const currentStyle = getTabStyle(tabKey, activeTab === tabKey, isDarkMode);
+
+    return (
+      <button
+        key={tabKey}
+        onClick={() => setActiveTab(tabKey)}
+        style={currentStyle}
+        onMouseEnter={(e) => applyHover(e.currentTarget)}
+        onMouseLeave={(e) => resetHover(e.currentTarget)}
+      >
+        {label}
+      </button>
+    );
+  };
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 1100);
@@ -260,16 +264,16 @@ function AppShell() {
             display: "grid",
             gap: 10,
             textAlign: "center",
-            fontSize: 12,
+            fontSize: 14,
             position: "fixed",
             top: 0,
             left: 0,
             right: 0,
-            paddingTop: 10,
+            paddingTop: 11,
             paddingLeft: 10,
             paddingRight: 10,
-            paddingBottom: 10,
-            boxShadow: "0 8px 20px rgba(15, 23, 42, 0.08)",
+            paddingBottom: 11,
+            boxShadow: "0 10px 22px rgba(15, 23, 42, 0.1)",
             zIndex: 20,
             transition: "background 0.25s ease, border-color 0.25s ease",
           }}
@@ -291,11 +295,11 @@ function AppShell() {
             borderBottom: "1px solid var(--border-strong)",
             display: "grid",
             textAlign: "center",
-            fontSize: 13,
+            fontSize: 15,
             position: "sticky",
             top: 0,
-            padding: "8px 18px",
-            boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
+            padding: "10px 18px",
+            boxShadow: "0 10px 22px rgba(15, 23, 42, 0.08)",
             zIndex: 20,
             transition: "background 0.25s ease, border-color 0.25s ease",
           }}
@@ -379,16 +383,16 @@ function AppShell() {
             display: "grid",
             gap: 10,
             textAlign: "center",
-            fontSize: 12,
+            fontSize: 14,
             position: "fixed",
             bottom: 0,
             left: 0,
             right: 0,
-            paddingTop: 10,
+            paddingTop: 11,
             paddingLeft: 10,
             paddingRight: 10,
-            paddingBottom: "calc(8px + env(safe-area-inset-bottom))",
-            boxShadow: "0 -6px 18px rgba(15, 23, 42, 0.08)",
+            paddingBottom: "calc(9px + env(safe-area-inset-bottom))",
+            boxShadow: "0 -8px 20px rgba(15, 23, 42, 0.1)",
             zIndex: 20,
             transition: "background 0.25s ease, border-color 0.25s ease",
           }}
@@ -416,36 +420,103 @@ export default function Page() {
   );
 }
 
-const tab = {
-  padding: "10px 8px",
-  minHeight: "42px",
-  background: "rgba(15, 23, 42, 0.08)",
-  border: "1px solid rgba(148, 163, 184, 0.18)",
+const tabBase = {
+  padding: "11px 8px",
+  minHeight: "46px",
   cursor: "pointer",
-  color: "var(--text)",
-  fontWeight: 600,
+  fontWeight: 700,
+  fontSize: "1.03rem",
+  letterSpacing: "0.01em",
   lineHeight: 1.2,
   borderRadius: "999px",
   transition: "all 0.18s ease",
 };
 
-const activeTabStyle = {
-  ...tab,
-  background: "linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(96, 165, 250, 0.2))",
-  border: "1px solid rgba(37, 99, 235, 0.28)",
-  color: "#2563eb",
+const lightTabTones: Record<string, { idle: string; idleBorder: string; active: string; activeBorder: string; text: string }> = {
+  home: {
+    idle: "linear-gradient(135deg, rgba(219,234,254,0.94), rgba(191,219,254,0.88))",
+    idleBorder: "rgba(96,165,250,0.26)",
+    active: "linear-gradient(135deg, rgba(59,130,246,0.26), rgba(147,197,253,0.92))",
+    activeBorder: "rgba(59,130,246,0.34)",
+    text: "#163a86",
+  },
+  logs: {
+    idle: "linear-gradient(135deg, rgba(224,231,255,0.94), rgba(199,210,254,0.88))",
+    idleBorder: "rgba(129,140,248,0.24)",
+    active: "linear-gradient(135deg, rgba(99,102,241,0.24), rgba(196,181,253,0.9))",
+    activeBorder: "rgba(99,102,241,0.34)",
+    text: "#3730a3",
+  },
+  library: {
+    idle: "linear-gradient(135deg, rgba(220,252,231,0.94), rgba(187,247,208,0.88))",
+    idleBorder: "rgba(74,222,128,0.24)",
+    active: "linear-gradient(135deg, rgba(34,197,94,0.2), rgba(187,247,208,0.92))",
+    activeBorder: "rgba(34,197,94,0.32)",
+    text: "#166534",
+  },
+  classes: {
+    idle: "linear-gradient(135deg, rgba(254,243,199,0.94), rgba(253,230,138,0.88))",
+    idleBorder: "rgba(245,158,11,0.22)",
+    active: "linear-gradient(135deg, rgba(245,158,11,0.22), rgba(253,230,138,0.94))",
+    activeBorder: "rgba(245,158,11,0.32)",
+    text: "#92400e",
+  },
+  planner: {
+    idle: "linear-gradient(135deg, rgba(254,226,226,0.94), rgba(254,202,202,0.88))",
+    idleBorder: "rgba(248,113,113,0.24)",
+    active: "linear-gradient(135deg, rgba(248,113,113,0.22), rgba(254,205,211,0.92))",
+    activeBorder: "rgba(248,113,113,0.34)",
+    text: "#9f1239",
+  },
+  settings: {
+    idle: "linear-gradient(135deg, rgba(226,232,240,0.95), rgba(203,213,225,0.9))",
+    idleBorder: "rgba(100,116,139,0.24)",
+    active: "linear-gradient(135deg, rgba(148,163,184,0.22), rgba(226,232,240,0.94))",
+    activeBorder: "rgba(100,116,139,0.32)",
+    text: "#334155",
+  },
 };
 
-const applyHover = (element: HTMLButtonElement, isActive: boolean) => {
+const getTabStyle = (tabKey: string, isActive: boolean, isDarkMode: boolean) => {
+  const tone = lightTabTones[tabKey] ?? lightTabTones.home;
+
+  if (isDarkMode) {
+    return {
+      ...tabBase,
+      background: isActive
+        ? "linear-gradient(135deg, rgba(71,85,105,0.9), rgba(148,163,184,0.46), rgba(226,232,240,0.18))"
+        : "linear-gradient(135deg, rgba(30,41,59,0.96), rgba(51,65,85,0.9))",
+      border: isActive
+        ? "1px solid rgba(226,232,240,0.34)"
+        : "1px solid rgba(148,163,184,0.22)",
+      color: isActive ? "#ffffff" : "#f1f5f9",
+      boxShadow: isActive
+        ? "inset 0 1px 0 rgba(255,255,255,0.3), 0 8px 18px rgba(2,6,23,0.34)"
+        : "inset 0 1px 0 rgba(255,255,255,0.08), 0 6px 14px rgba(2,6,23,0.24)",
+      textShadow: isActive
+        ? "0 1px 0 rgba(255,255,255,0.34), 0 0 12px rgba(255,255,255,0.3)"
+        : "0 1px 0 rgba(255,255,255,0.16), 0 0 10px rgba(226,232,240,0.18)",
+    };
+  }
+
+  return {
+    ...tabBase,
+    background: isActive ? tone.active : tone.idle,
+    border: `1px solid ${isActive ? tone.activeBorder : tone.idleBorder}`,
+    color: tone.text,
+    boxShadow: isActive
+      ? "inset 0 1px 0 rgba(255,255,255,0.42), 0 8px 16px rgba(15,23,42,0.1)"
+      : "inset 0 1px 0 rgba(255,255,255,0.36), 0 5px 12px rgba(15,23,42,0.07)",
+    textShadow: "0 1px 0 rgba(255,255,255,0.3)",
+  };
+};
+
+const applyHover = (element: HTMLButtonElement) => {
   element.style.transform = "translateY(-1px)";
-  element.style.background = isActive
-    ? "rgba(37, 99, 235, 0.18)"
-    : "rgba(148, 163, 184, 0.16)";
+  element.style.filter = "brightness(1.04)";
 };
 
-const resetHover = (element: HTMLButtonElement, isActive: boolean) => {
+const resetHover = (element: HTMLButtonElement) => {
   element.style.transform = "none";
-  element.style.background = isActive
-    ? "linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(96, 165, 250, 0.2))"
-    : "rgba(15, 23, 42, 0.08)";
+  element.style.filter = "none";
 };
