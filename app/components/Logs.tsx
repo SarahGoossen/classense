@@ -496,9 +496,6 @@ export default function Logs() {
     if (typeof window === "undefined") return;
 
     if (isDictating) {
-      recognitionRef.current?.stop();
-      setIsDictating(false);
-      showMessage("Dictation stopped");
       return;
     }
 
@@ -509,7 +506,7 @@ export default function Logs() {
     }
 
     const recognition = new Recognition();
-    recognition.continuous = true;
+    recognition.continuous = false;
     recognition.interimResults = false;
     recognition.lang = "en-US";
 
@@ -533,7 +530,6 @@ export default function Logs() {
 
     recognition.onerror = () => {
       setIsDictating(false);
-      showMessage("Dictation could not start");
     };
 
     recognition.onend = () => {
@@ -543,7 +539,6 @@ export default function Logs() {
     recognitionRef.current = recognition;
     recognition.start();
     setIsDictating(true);
-    showMessage("Dictation started");
   };
 
   const handleEditorClose = () => {
@@ -595,8 +590,8 @@ export default function Logs() {
   };
 
   const handleSave = () => {
-    if (!selectedClass || !title || !date || !content.trim()) {
-      showMessage("Class, date, title, and lesson plan are required");
+    if (!title.trim() || !date || !lessonTime) {
+      showMessage("Title, date, and time are required");
       return;
     }
 
@@ -604,9 +599,9 @@ export default function Logs() {
 const classTime = lessonTime || getClassTime(selectedClass);
     const payload: Log = {
   id: editingId ?? Date.now(),
-  className: selectedClass,
+  className: selectedClass || "Unassigned",
  classTime,
-  title,
+  title: title.trim(),
   date,
   content,
   tags: mergedTags,
@@ -619,7 +614,9 @@ const classTime = lessonTime || getClassTime(selectedClass);
         : [payload, ...logs];
 
     saveLogs(updated);
-    localStorage.setItem("lastUsedClass", selectedClass);
+    if (selectedClass) {
+      localStorage.setItem("lastUsedClass", selectedClass);
+    }
 
     const remindersEnabled = getStoredRemindersEnabled();
     const existing = JSON.parse(localStorage.getItem("reminders") || "[]");
@@ -1104,13 +1101,12 @@ const classTime = lessonTime || getClassTime(selectedClass);
                   style={{ ...inputStyle, ...lessonPlanTextAreaStyle }}
                 />
                 <button
-                  aria-label={isDictating ? "Stop voice dictation" : "Start voice dictation"}
+                  aria-label="Use voice dictation"
                   onClick={handleDictationToggle}
                   style={{
                     ...micButtonStyle,
-                    background: isDictating
-                      ? "linear-gradient(135deg, rgba(37,99,235,0.28), rgba(96,165,250,0.26))"
-                      : "rgba(15, 23, 42, 0.8)",
+                    background: "rgba(15, 23, 42, 0.8)",
+                    opacity: isDictating ? 0.82 : 1,
                   }}
                   type="button"
                 >
