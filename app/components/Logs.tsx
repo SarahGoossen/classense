@@ -130,13 +130,13 @@ export default function Logs() {
   const [enablePrepReminder, setEnablePrepReminder] = useState(true);
   const [prepReminderTime, setPrepReminderTime] = useState("2h");
   const [isDictating, setIsDictating] = useState(false);
-  const [dictationPreview, setDictationPreview] = useState("");
   const [enableFollowUpReminder, setEnableFollowUpReminder] = useState(false);
   const [followUpReminderOption, setFollowUpReminderOption] = useState("later_today");
   const [followUpReminderCustomAt, setFollowUpReminderCustomAt] = useState("");
   const [draftReminderId, setDraftReminderId] = useState<number | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const dictationBufferRef = useRef("");
+  const dictationBaseContentRef = useRef("");
 
   const today = () => new Date().toISOString().split("T")[0];
 
@@ -511,17 +511,22 @@ export default function Logs() {
     return /[.!?]$/.test(withCapital) ? withCapital : `${withCapital}.`;
   };
 
+  const renderDictationIntoContent = (spokenText: string) => {
+    const base = dictationBaseContentRef.current.trimEnd();
+    const spoken = spokenText.trim();
+    return `${base}${base && spoken ? "\n\n" : ""}${spoken}`;
+  };
+
   const commitDictation = () => {
     const finalText = normalizeDictationText(dictationBufferRef.current);
     dictationBufferRef.current = "";
-    setDictationPreview("");
 
-    if (!finalText) return;
+    if (!finalText) {
+      setContent(dictationBaseContentRef.current);
+      return;
+    }
 
-    setContent((prev) => {
-      const trimmed = prev.trimEnd();
-      return `${trimmed}${trimmed ? "\n\n" : ""}${finalText}`;
-    });
+    setContent(renderDictationIntoContent(finalText));
   };
 
   const handleDictationToggle = () => {
@@ -560,9 +565,12 @@ export default function Logs() {
         dictationBufferRef.current = `${dictationBufferRef.current} ${finalTranscript}`.trim();
       }
 
-      setDictationPreview(
-        [dictationBufferRef.current, liveTranscript.trim()].filter(Boolean).join(" ")
-      );
+      const combinedTranscript = [dictationBufferRef.current, liveTranscript.trim()]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+
+      setContent(renderDictationIntoContent(combinedTranscript));
     };
 
     recognition.onerror = (event?: SpeechRecognitionErrorLike) => {
@@ -571,7 +579,8 @@ export default function Logs() {
       } else if (event?.error === "no-speech") {
         showMessage("No speech was detected. Try again and speak a little closer.");
       }
-      setDictationPreview("");
+      setContent(dictationBaseContentRef.current);
+      recognitionRef.current = null;
       setIsDictating(false);
     };
 
@@ -583,8 +592,8 @@ export default function Logs() {
 
     recognitionRef.current = recognition;
     recognition.start();
+    dictationBaseContentRef.current = content;
     dictationBufferRef.current = "";
-    setDictationPreview("");
     setIsDictating(true);
   };
 
@@ -1220,8 +1229,8 @@ const classTime = lessonTime || getClassTime(selectedClass);
               </div>
               <div style={dictationHintStyle}>
                 {isDictating
-                  ? dictationPreview || "Listening now. Tap Stop when you're done speaking."
-                  : "Tap Speak to dictate your lesson plan, then Stop to place it into the lesson."}
+                  ? "Listening now. Speak naturally, then tap Stop to finish dictation."
+                  : "Tap Speak to start dictation. Tap Stop when you want Classense to finish typing."}
               </div>
 
               <div style={reminderCardStyle}>
