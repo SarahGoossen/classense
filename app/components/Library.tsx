@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
+import { subscribeClassenseStorageSync } from "../utils/storageSync";
 
 export default function Library() {
   const [isMobile, setIsMobile] = useState(false);
@@ -12,11 +13,17 @@ export default function Library() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const loadLibrary = () => {
     const saved = JSON.parse(localStorage.getItem("library") || "[]");
     const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
     setItems(saved);
     setClasses(savedClasses);
+  };
+
+  useEffect(() => {
+    loadLibrary();
+    const unsubscribeSync = subscribeClassenseStorageSync(loadLibrary);
+    return () => unsubscribeSync();
   }, []);
 
   useEffect(() => {

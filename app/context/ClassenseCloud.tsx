@@ -12,6 +12,7 @@ import {
 } from "react";
 import type { User } from "@supabase/supabase-js";
 import { getSupabaseBrowserClient, isSupabaseConfigured } from "../lib/supabase";
+import { emitClassenseStorageSync } from "../utils/storageSync";
 
 type AuthMode = "signin" | "signup";
 
@@ -138,6 +139,7 @@ const writeLocalSnapshot = (snapshot: Snapshot) => {
   );
   localStorage.setItem("library", JSON.stringify(snapshot.library || []));
   localStorage.setItem("reminders", JSON.stringify(snapshot.reminders || []));
+  emitClassenseStorageSync();
 };
 
 const hasMeaningfulData = (snapshot: Snapshot) =>
@@ -324,6 +326,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.setItem = function patchedSetItem(key, value) {
       originalSetItem.call(this, key, value);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
+        emitClassenseStorageSync();
         scheduleUpload();
       }
     };
@@ -331,6 +334,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.removeItem = function patchedRemoveItem(key) {
       originalRemoveItem.call(this, key);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
+        emitClassenseStorageSync();
         scheduleUpload();
       }
     };

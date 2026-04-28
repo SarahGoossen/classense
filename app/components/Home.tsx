@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { subscribeClassenseStorageSync } from "../utils/storageSync";
 const getUserName = () => {
   if (typeof window === "undefined") return "";
   return localStorage.getItem("app_name") || "";
@@ -92,10 +93,12 @@ export default function Home({ setTab }: any) {
     // 🔥 FIX 2: refresh when logs/classes change (live sync)
     const onStorage = () => loadData();
     window.addEventListener("storage", onStorage);
+    const unsubscribeSync = subscribeClassenseStorageSync(loadData);
 
     return () => {
       window.removeEventListener("focus", onFocus);
       window.removeEventListener("storage", onStorage);
+      unsubscribeSync();
     };
   }, []);
 

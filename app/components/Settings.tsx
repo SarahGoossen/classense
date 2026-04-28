@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useClassenseCloud } from "../context/ClassenseCloud";
+import { subscribeClassenseStorageSync } from "../utils/storageSync";
 import {
   getOrCreatePushDeviceId,
   registerPushServiceWorker,
@@ -52,7 +53,7 @@ export default function Settings() {
   const [pushBusy, setPushBusy] = useState(false);
   const { cloudEnabled, user, syncStatus, signOut, signingOut } = useClassenseCloud();
 
-  useEffect(() => {
+  const loadSettings = async () => {
     const savedName = localStorage.getItem("app_name");
     const savedClass = localStorage.getItem("lastUsedClass");
     const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
@@ -65,7 +66,7 @@ export default function Settings() {
 
     if (savedName) setName(savedName);
     if (savedClass) setDefaultClass(savedClass);
-    if (savedClasses) setClasses(savedClasses);
+    setClasses(savedClasses || []);
 
     if (savedReminders) setRemindersEnabled(savedReminders === "true");
     if (savedClassReminder) setClassReminder(savedClassReminder === "true");
@@ -82,10 +83,17 @@ export default function Settings() {
 
     setNotificationStatus(`Browser permission: ${Notification.permission}`);
 
-    void navigator.serviceWorker.ready.then(async (registration) => {
-      const subscription = await registration.pushManager.getSubscription();
-      setPushEnabled(Boolean(subscription));
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+    setPushEnabled(Boolean(subscription));
+  };
+
+  useEffect(() => {
+    void loadSettings();
+    const unsubscribeSync = subscribeClassenseStorageSync(() => {
+      void loadSettings();
     });
+    return () => unsubscribeSync();
   }, []);
 
   useEffect(() => {

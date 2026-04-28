@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { calculateReminderTime } from "../utils/reminders";
+import { subscribeClassenseStorageSync } from "../utils/storageSync";
 
 type ReminderItem = {
   id: number;
@@ -72,7 +73,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
 
-  useEffect(() => {
+  const loadPlannerData = () => {
     const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
     const savedEvents = JSON.parse(localStorage.getItem("plannerEvents") || "[]");
     const savedReminders = JSON.parse(localStorage.getItem("reminders") || "[]");
@@ -81,6 +82,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setEvents(savedEvents);
     setReminders(savedReminders);
     setLoaded(true);
+  };
+
+  useEffect(() => {
+    loadPlannerData();
+    const unsubscribeSync = subscribeClassenseStorageSync(loadPlannerData);
+    return () => unsubscribeSync();
   }, []);
 
   useEffect(() => {

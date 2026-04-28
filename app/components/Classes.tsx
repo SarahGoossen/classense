@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { subscribeClassenseStorageSync } from "../utils/storageSync";
 
 const days = [
   "Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday",
@@ -18,7 +19,7 @@ export default function Classes() {
   const [editingDay, setEditingDay] = useState(1);
   const [editingTime, setEditingTime] = useState("19:00");
 
-  useEffect(() => {
+  const loadClasses = () => {
     const saved = JSON.parse(localStorage.getItem("classes") || "[]");
 
     const fixed = saved.map((c: any) => ({
@@ -28,7 +29,16 @@ export default function Classes() {
     }));
 
     setClasses(fixed);
-    localStorage.setItem("classes", JSON.stringify(fixed));
+
+    if (JSON.stringify(saved) !== JSON.stringify(fixed)) {
+      localStorage.setItem("classes", JSON.stringify(fixed));
+    }
+  };
+
+  useEffect(() => {
+    loadClasses();
+    const unsubscribeSync = subscribeClassenseStorageSync(loadClasses);
+    return () => unsubscribeSync();
   }, []);
 
   useEffect(() => {
