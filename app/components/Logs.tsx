@@ -1009,22 +1009,26 @@ const classTime = lessonTime || getClassTime(selectedClass);
   const lessonPlanHeaderStyle: React.CSSProperties = {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 12,
   };
 
-  const lessonPlanHintStyle: React.CSSProperties = {
-    fontSize: 13,
-    lineHeight: 1.5,
+  const micGuideTextStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    lineHeight: 1.45,
     color: isDictating ? "var(--bubble-blue-text)" : "var(--muted)",
-    background: isDictating ? "var(--bubble-blue-bg)" : "rgba(255,255,255,0.46)",
+    background: isDictating ? "var(--bubble-blue-bg)" : "rgba(255,255,255,0.52)",
     border: isDictating
       ? "1px solid var(--bubble-blue-border)"
       : "1px solid rgba(148,163,184,0.14)",
-    borderRadius: 14,
-    padding: "10px 12px",
-    maxWidth: 320,
+    borderRadius: 999,
+    padding: "8px 12px",
+    maxWidth: 280,
     boxShadow: isDictating ? "0 10px 18px rgba(37,99,235,0.1)" : "none",
+    position: "absolute",
+    right: 14,
+    bottom: 72,
+    zIndex: 1,
   };
 
   const lessonPlanTextAreaStyle: React.CSSProperties = {
@@ -1198,17 +1202,15 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
               <div style={lessonPlanPanelStyle}>
                 <div style={lessonPlanHeaderStyle}>
-                  <div>
-                    <div style={{ ...editorSectionLabel, marginBottom: 6 }}>Lesson Plan</div>
-                    <div style={lessonPlanHintStyle}>
-                      {isDictating
-                        ? "Listening now. Speak naturally, then tap Stop when you're ready to finish."
-                        : "Write here or tap Speak to dictate directly into your lesson plan. Tap Stop when you're done."}
-                    </div>
-                  </div>
+                  <div style={{ ...editorSectionLabel, marginBottom: 0 }}>Lesson Plan</div>
                 </div>
 
                 <div style={textAreaWrapStyle}>
+                  <div style={micGuideTextStyle}>
+                    {isDictating
+                      ? "Mic is on. Speak naturally, then tap Stop."
+                      : "Tap Speak to dictate here, then Stop when you're done."}
+                  </div>
                   <textarea
                     placeholder="Lesson plan"
                     value={content}
