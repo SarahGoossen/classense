@@ -889,6 +889,35 @@ const classTime = lessonTime || getClassTime(selectedClass);
     gap: 16,
   };
 
+  const reminderTitleStyle: React.CSSProperties = {
+    fontSize: 15.5,
+    fontWeight: 700,
+    color: "var(--text)",
+    marginBottom: 8,
+  };
+
+  const reminderLeadStyle: React.CSSProperties = {
+    fontSize: 13,
+    fontWeight: 500,
+    color: "var(--muted)",
+    lineHeight: 1.55,
+    marginBottom: 16,
+    maxWidth: 430,
+  };
+
+  const reminderItemTitleStyle: React.CSSProperties = {
+    fontWeight: 600,
+    fontSize: 13.5,
+    marginBottom: 4,
+    color: "var(--text)",
+  };
+
+  const reminderItemCopyStyle: React.CSSProperties = {
+    fontSize: 12.5,
+    color: "var(--muted)",
+    lineHeight: 1.45,
+  };
+
   const reminderPreview = (() => {
     if (!date || !lessonTime) return "";
 
@@ -956,21 +985,22 @@ const classTime = lessonTime || getClassTime(selectedClass);
   };
 
   const micGuideTextStyle: React.CSSProperties = {
-    fontSize: 12.5,
-    lineHeight: 1.45,
+    fontSize: 11.5,
+    lineHeight: 1.35,
     color: isDictating ? "var(--bubble-blue-text)" : "var(--muted)",
     background: isDictating ? "var(--bubble-blue-bg)" : "rgba(255,255,255,0.52)",
     border: isDictating
       ? "1px solid var(--bubble-blue-border)"
       : "1px solid rgba(148,163,184,0.14)",
-    borderRadius: 999,
-    padding: "8px 12px",
-    maxWidth: 280,
+    borderRadius: 16,
+    padding: "8px 10px",
+    width: 124,
     boxShadow: isDictating ? "0 10px 18px rgba(37,99,235,0.1)" : "none",
     position: "absolute",
     right: 14,
-    bottom: 72,
+    bottom: 68,
     zIndex: 1,
+    textAlign: "center",
   };
 
   const lessonPlanTextAreaStyle: React.CSSProperties = {
@@ -1210,14 +1240,14 @@ const classTime = lessonTime || getClassTime(selectedClass);
               </div>
 
               <div style={reminderCardStyle}>
-                <div style={{ ...editorSectionLabel, marginBottom: 10 }}>Smart Reminders</div>
-                <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14, color: "var(--text)" }}>
+                <div style={reminderTitleStyle}>Smart Reminders</div>
+                <div style={reminderLeadStyle}>
                   Stay prepared before class and finish what's left after.
                 </div>
                 <div style={reminderToggleStyle}>
                   <div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Before Class Reminder</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
+                    <div style={reminderItemTitleStyle}>Before Class Reminder</div>
+                    <div style={reminderItemCopyStyle}>
                       Get a heads-up before class starts.
                     </div>
                   </div>
@@ -1270,8 +1300,8 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
                 <div style={reminderToggleStyle}>
                   <div>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>Follow-Up Reminder</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.45 }}>
+                    <div style={reminderItemTitleStyle}>Follow-Up Reminder</div>
+                    <div style={reminderItemCopyStyle}>
                       Get reminded if this lesson still needs work.
                     </div>
                   </div>
