@@ -77,6 +77,7 @@ export default function Library() {
   };
 
   const handleDelete = (id: number) => {
+    if (!window.confirm("Delete this library item?")) return;
     saveNow(items.filter((i) => i.id !== id));
   };
 

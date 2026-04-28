@@ -203,6 +203,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   };
 
   const handleDelete = (id) => {
+    if (!window.confirm("Delete this scheduled event?")) return;
     setEvents((prev) => prev.filter((e) => e.id !== id));
     removeEventReminder(id);
   };
@@ -266,6 +267,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     .sort((a, b) => (a.remindAt > b.remindAt ? 1 : -1));
 
   const handleDeleteReminder = (id: number) => {
+    if (!window.confirm("Delete this reminder?")) return;
     const updated = reminders.filter((item) => item.id !== id);
     setReminders(updated);
   };

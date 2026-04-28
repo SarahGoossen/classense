@@ -73,6 +73,7 @@ export default function Classes() {
   };
 
   const handleDelete = (id: number) => {
+    if (!window.confirm("Delete this class?")) return;
     saveNow(classes.filter((c) => c.id !== id));
   };
 

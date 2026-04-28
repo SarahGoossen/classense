@@ -303,6 +303,7 @@ export default function Logs() {
   };
 
   const handleDelete = (id: number) => {
+    if (!window.confirm("Delete this lesson plan?")) return;
     const updated = logs.filter((log) => log.id !== id);
     saveLogs(updated);
     setSelectedLog(null);
@@ -1073,19 +1074,18 @@ const classTime = lessonTime || getClassTime(selectedClass);
     position: "absolute",
     right: 14,
     bottom: 14,
-    minWidth: 138,
-    minHeight: 56,
-    padding: "8px 14px",
-    borderRadius: 18,
+    minWidth: 120,
+    minHeight: 44,
+    padding: "6px 12px",
+    borderRadius: 999,
     border: "1px solid rgba(148,163,184,0.24)",
-    display: "inline-grid",
+    display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 8,
     color: "#fff",
     cursor: "pointer",
     boxShadow: "0 10px 18px rgba(15,23,42,0.24)",
-    textAlign: "center",
   };
 
   const dictationIndicatorStyle: React.CSSProperties = {
@@ -1266,18 +1266,15 @@ const classTime = lessonTime || getClassTime(selectedClass);
                         fill="currentColor"
                       />
                     </svg>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" }}>
-                      {isDictating ? "Stop" : "Speak"}
-                    </span>
                     <span
                       style={{
-                        fontSize: 10.5,
+                        fontSize: 11.5,
                         fontWeight: 600,
                         letterSpacing: "0.01em",
                         opacity: 0.88,
                       }}
                     >
-                      {isDictating ? "Tap to stop" : "Tap to speak"}
+                      {isDictating ? "Tap to Stop" : "Tap to Speak"}
                     </span>
                     {isDictating && (
                       <span aria-hidden="true" style={dictationIndicatorStyle}>
