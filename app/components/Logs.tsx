@@ -996,10 +996,47 @@ const classTime = lessonTime || getClassTime(selectedClass);
     position: "relative",
   };
 
+  const lessonPlanPanelStyle: React.CSSProperties = {
+    background: "var(--premium-panel-strong)",
+    border: "1px solid rgba(148,163,184,0.16)",
+    borderRadius: 22,
+    padding: 16,
+    boxShadow: "0 18px 34px rgba(15,23,42,0.08), inset 0 1px 0 rgba(255,255,255,0.42)",
+    display: "grid",
+    gap: 12,
+  };
+
+  const lessonPlanHeaderStyle: React.CSSProperties = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  };
+
+  const lessonPlanHintStyle: React.CSSProperties = {
+    fontSize: 13,
+    lineHeight: 1.5,
+    color: isDictating ? "var(--bubble-blue-text)" : "var(--muted)",
+    background: isDictating ? "var(--bubble-blue-bg)" : "rgba(255,255,255,0.46)",
+    border: isDictating
+      ? "1px solid var(--bubble-blue-border)"
+      : "1px solid rgba(148,163,184,0.14)",
+    borderRadius: 14,
+    padding: "10px 12px",
+    maxWidth: 320,
+    boxShadow: isDictating ? "0 10px 18px rgba(37,99,235,0.1)" : "none",
+  };
+
   const lessonPlanTextAreaStyle: React.CSSProperties = {
     minHeight: "40vh",
     resize: "vertical",
     paddingBottom: 64,
+    border: "none",
+    background: "transparent",
+    boxShadow: "none",
+    paddingLeft: 0,
+    paddingRight: 0,
+    paddingTop: 0,
   };
 
   const micButtonStyle: React.CSSProperties = {
@@ -1026,19 +1063,6 @@ const classTime = lessonTime || getClassTime(selectedClass);
     alignItems: "end",
     gap: 3,
     height: 16,
-  };
-
-  const dictationHintStyle: React.CSSProperties = {
-    fontSize: 12.5,
-    lineHeight: 1.45,
-    color: isDictating ? "var(--bubble-blue-text)" : "var(--muted)",
-    marginTop: 10,
-    padding: "10px 12px",
-    borderRadius: 12,
-    background: isDictating ? "var(--bubble-blue-bg)" : "var(--surface-soft)",
-    border: isDictating
-      ? "1px solid var(--bubble-blue-border)"
-      : "1px solid var(--border)",
   };
 
   const reminderPreviewStyle: React.CSSProperties = {
@@ -1172,65 +1196,73 @@ const classTime = lessonTime || getClassTime(selectedClass);
                 style={inputStyle}
               />
 
-              <div style={textAreaWrapStyle}>
-                <textarea
-                  placeholder="Lesson plan"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  style={{ ...inputStyle, ...lessonPlanTextAreaStyle }}
-                />
-                <button
-                  aria-label={isDictating ? "Stop voice dictation" : "Start voice dictation"}
-                  onClick={handleDictationToggle}
-                  style={{
-                    ...micButtonStyle,
-                    background: isDictating
-                      ? "linear-gradient(135deg, rgba(14,165,233,0.96), rgba(37,99,235,0.96))"
-                      : "rgba(15, 23, 42, 0.86)",
-                    border: isDictating
-                      ? "1px solid rgba(191,219,254,0.7)"
-                      : "1px solid rgba(148,163,184,0.24)",
-                    boxShadow: isDictating
-                      ? "0 14px 24px rgba(37,99,235,0.3)"
-                      : micButtonStyle.boxShadow,
-                  }}
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    viewBox="0 0 24 24"
-                    style={{ width: 18, height: 18 }}
+              <div style={lessonPlanPanelStyle}>
+                <div style={lessonPlanHeaderStyle}>
+                  <div>
+                    <div style={{ ...editorSectionLabel, marginBottom: 6 }}>Lesson Plan</div>
+                    <div style={lessonPlanHintStyle}>
+                      {isDictating
+                        ? "Listening now. Speak naturally, then tap Stop when you're ready to finish."
+                        : "Write here or tap Speak to dictate directly into your lesson plan. Tap Stop when you're done."}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={textAreaWrapStyle}>
+                  <textarea
+                    placeholder="Lesson plan"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    style={{ ...inputStyle, ...lessonPlanTextAreaStyle }}
+                  />
+                  <button
+                    aria-label={isDictating ? "Stop voice dictation" : "Start voice dictation"}
+                    onClick={handleDictationToggle}
+                    style={{
+                      ...micButtonStyle,
+                      background: isDictating
+                        ? "linear-gradient(135deg, rgba(14,165,233,0.96), rgba(37,99,235,0.96))"
+                        : "rgba(15, 23, 42, 0.86)",
+                      border: isDictating
+                        ? "1px solid rgba(191,219,254,0.7)"
+                        : "1px solid rgba(148,163,184,0.24)",
+                      boxShadow: isDictating
+                        ? "0 14px 24px rgba(37,99,235,0.3)"
+                        : micButtonStyle.boxShadow,
+                    }}
+                    type="button"
                   >
-                    <path
-                      d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zm5 9a5 5 0 01-10 0H5a7 7 0 0014 0zm-4 8h-2v-3.08A7.03 7.03 0 0112 17a7.03 7.03 0 011 .92z"
-                      fill="currentColor"
-                    />
-                  </svg>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" }}>
-                    {isDictating ? "Stop" : "Speak"}
-                  </span>
-                  {isDictating && (
-                    <span aria-hidden="true" style={dictationIndicatorStyle}>
-                      {[0, 1, 2].map((bar) => (
-                        <span
-                          key={bar}
-                          style={{
-                            width: 4,
-                            borderRadius: 999,
-                            background: "rgba(255,255,255,0.95)",
-                            animation: `dictationPulse 0.9s ${bar * 0.14}s ease-in-out infinite`,
-                            height: `${10 + bar * 3}px`,
-                          }}
-                        />
-                      ))}
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      style={{ width: 18, height: 18 }}
+                    >
+                      <path
+                        d="M12 3a3 3 0 00-3 3v6a3 3 0 006 0V6a3 3 0 00-3-3zm5 9a5 5 0 01-10 0H5a7 7 0 0014 0zm-4 8h-2v-3.08A7.03 7.03 0 0112 17a7.03 7.03 0 011 .92z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" }}>
+                      {isDictating ? "Stop" : "Speak"}
                     </span>
-                  )}
-                </button>
-              </div>
-              <div style={dictationHintStyle}>
-                {isDictating
-                  ? "Listening now. Speak naturally, then tap Stop to finish dictation."
-                  : "Tap Speak to start dictation. Tap Stop when you want Classense to finish typing."}
+                    {isDictating && (
+                      <span aria-hidden="true" style={dictationIndicatorStyle}>
+                        {[0, 1, 2].map((bar) => (
+                          <span
+                            key={bar}
+                            style={{
+                              width: 4,
+                              borderRadius: 999,
+                              background: "rgba(255,255,255,0.95)",
+                              animation: `dictationPulse 0.9s ${bar * 0.14}s ease-in-out infinite`,
+                              height: `${10 + bar * 3}px`,
+                            }}
+                          />
+                        ))}
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
 
               <div style={reminderCardStyle}>
