@@ -146,6 +146,79 @@ export default function Logs() {
     window.setTimeout(() => setMessage(""), 2000);
   };
 
+  const loadCoreData = () => {
+    const savedClasses = localStorage.getItem("classes");
+    const savedLogs = localStorage.getItem("logs");
+
+    const parsedClasses: ClassItem[] = savedClasses ? JSON.parse(savedClasses) : [];
+    const parsedLogs: Log[] = savedLogs ? JSON.parse(savedLogs) : [];
+
+    setClasses(parsedClasses);
+    setLogs(parsedLogs);
+
+    return { parsedClasses, parsedLogs };
+  };
+
+  const loadEditorData = () => {
+    const { parsedClasses, parsedLogs } = loadCoreData();
+    const lastClass = localStorage.getItem("lastUsedClass");
+    const openId = localStorage.getItem("openLogId");
+    const editId = localStorage.getItem("editLogId");
+    const findClassTime = (className: string) =>
+      parsedClasses.find((item) => item.name === className)?.time || "18:00";
+
+    if (lastClass) setSelectedClass(lastClass);
+
+    if (openId) {
+      const found = parsedLogs.find((log) => log.id === Number(openId));
+      if (found) {
+        setSelectedLog(found);
+        localStorage.removeItem("openLogId");
+      }
+    }
+
+    if (editId) {
+      const found = parsedLogs.find((log) => log.id === Number(editId));
+      if (found) {
+        setSelectedClass(found.className);
+        setLessonTime(found.classTime || findClassTime(found.className));
+        setTitle(found.title);
+        setDate(found.date);
+        setContent(found.content);
+        setTags(found.tags || []);
+        setTagInput("");
+        setReferences(found.references || "");
+        setEditingId(found.id);
+        setSelectedLog(null);
+        setIsEditor(true);
+        setEnablePrepReminder(getStoredPrepReminder());
+        setPrepReminderTime(getStoredPrepTime());
+      }
+      localStorage.removeItem("editLogId");
+    }
+
+    if (localStorage.getItem("openNewLesson") === "true") {
+      setSelectedClass(lastClass || "");
+      setLessonTime(findClassTime(lastClass || ""));
+      setTitle("");
+      setDate(today());
+      setContent("");
+      setTags([]);
+      setTagInput("");
+      setReferences("");
+      setEditingId(null);
+      setSelectedLog(null);
+      setIsEditor(true);
+      setEnablePrepReminder(getStoredPrepReminder());
+      setPrepReminderTime(getStoredPrepTime());
+      setEnableFollowUpReminder(false);
+      setFollowUpReminderOption("later_today");
+      setFollowUpReminderCustomAt("");
+      setDraftReminderId(null);
+      localStorage.removeItem("openNewLesson");
+    }
+  };
+
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
@@ -1791,76 +1864,4 @@ const classTime = lessonTime || getClassTime(selectedClass);
       </div>
     </div>
   );
-  } 
-  const loadCoreData = () => {
-    const savedClasses = localStorage.getItem("classes");
-    const savedLogs = localStorage.getItem("logs");
-
-    const parsedClasses: ClassItem[] = savedClasses ? JSON.parse(savedClasses) : [];
-    const parsedLogs: Log[] = savedLogs ? JSON.parse(savedLogs) : [];
-
-    setClasses(parsedClasses);
-    setLogs(parsedLogs);
-
-    return { parsedClasses, parsedLogs };
-  };
-
-  const loadEditorData = () => {
-    const { parsedClasses, parsedLogs } = loadCoreData();
-    const lastClass = localStorage.getItem("lastUsedClass");
-    const openId = localStorage.getItem("openLogId");
-    const editId = localStorage.getItem("editLogId");
-    const findClassTime = (className: string) =>
-      parsedClasses.find((item) => item.name === className)?.time || "18:00";
-
-    if (lastClass) setSelectedClass(lastClass);
-
-    if (openId) {
-      const found = parsedLogs.find((log) => log.id === Number(openId));
-      if (found) {
-        setSelectedLog(found);
-        localStorage.removeItem("openLogId");
-      }
-    }
-
-    if (editId) {
-      const found = parsedLogs.find((log) => log.id === Number(editId));
-      if (found) {
-        setSelectedClass(found.className);
-        setLessonTime(found.classTime || findClassTime(found.className));
-        setTitle(found.title);
-        setDate(found.date);
-        setContent(found.content);
-        setTags(found.tags || []);
-        setTagInput("");
-        setReferences(found.references || "");
-        setEditingId(found.id);
-        setSelectedLog(null);
-        setIsEditor(true);
-        setEnablePrepReminder(getStoredPrepReminder());
-        setPrepReminderTime(getStoredPrepTime());
-      }
-      localStorage.removeItem("editLogId");
-    }
-
-    if (localStorage.getItem("openNewLesson") === "true") {
-      setSelectedClass(lastClass || "");
-      setLessonTime(findClassTime(lastClass || ""));
-      setTitle("");
-      setDate(today());
-      setContent("");
-      setTags([]);
-      setTagInput("");
-      setReferences("");
-      setEditingId(null);
-      setSelectedLog(null);
-      setIsEditor(true);
-      setEnablePrepReminder(getStoredPrepReminder());
-      setPrepReminderTime(getStoredPrepTime());
-      setEnableFollowUpReminder(false);
-      setFollowUpReminderOption("later_today");
-      setFollowUpReminderCustomAt("");
-      setDraftReminderId(null);
-      localStorage.removeItem("openNewLesson");
-    }
-  };
+}
