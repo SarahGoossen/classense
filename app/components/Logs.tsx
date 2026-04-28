@@ -1057,25 +1057,6 @@ const classTime = lessonTime || getClassTime(selectedClass);
     gap: 12,
   };
 
-  const micGuideTextStyle: React.CSSProperties = {
-    fontSize: 11.5,
-    lineHeight: 1.35,
-    color: isDictating ? "var(--bubble-blue-text)" : "var(--muted)",
-    background: isDictating ? "var(--bubble-blue-bg)" : "rgba(255,255,255,0.52)",
-    border: isDictating
-      ? "1px solid var(--bubble-blue-border)"
-      : "1px solid rgba(148,163,184,0.14)",
-    borderRadius: 16,
-    padding: "8px 10px",
-    width: 124,
-    boxShadow: isDictating ? "0 10px 18px rgba(37,99,235,0.1)" : "none",
-    position: "absolute",
-    right: 14,
-    bottom: 68,
-    zIndex: 1,
-    textAlign: "center",
-  };
-
   const lessonPlanTextAreaStyle: React.CSSProperties = {
     minHeight: "40vh",
     resize: "vertical",
@@ -1092,18 +1073,19 @@ const classTime = lessonTime || getClassTime(selectedClass);
     position: "absolute",
     right: 14,
     bottom: 14,
-    minWidth: 124,
-    height: 48,
-    padding: "0 14px",
-    borderRadius: 999,
+    minWidth: 138,
+    minHeight: 56,
+    padding: "8px 14px",
+    borderRadius: 18,
     border: "1px solid rgba(148,163,184,0.24)",
-    display: "inline-flex",
+    display: "inline-grid",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 4,
     color: "#fff",
     cursor: "pointer",
     boxShadow: "0 10px 18px rgba(15,23,42,0.24)",
+    textAlign: "center",
   };
 
   const dictationIndicatorStyle: React.CSSProperties = {
@@ -1251,11 +1233,6 @@ const classTime = lessonTime || getClassTime(selectedClass);
                 </div>
 
                 <div style={textAreaWrapStyle}>
-                  <div style={micGuideTextStyle}>
-                    {isDictating
-                      ? "Mic is on. Speak naturally, then tap Stop."
-                      : "Tap Speak to dictate here, then Stop when you're done."}
-                  </div>
                   <textarea
                     placeholder="Lesson plan"
                     value={content}
@@ -1291,6 +1268,16 @@ const classTime = lessonTime || getClassTime(selectedClass);
                     </svg>
                     <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.01em" }}>
                       {isDictating ? "Stop" : "Speak"}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        letterSpacing: "0.01em",
+                        opacity: 0.88,
+                      }}
+                    >
+                      {isDictating ? "Tap to stop" : "Tap to speak"}
                     </span>
                     {isDictating && (
                       <span aria-hidden="true" style={dictationIndicatorStyle}>
