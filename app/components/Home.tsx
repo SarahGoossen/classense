@@ -69,6 +69,7 @@ export default function Home({ setTab }: any) {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
+  const [showWelcomeTips, setShowWelcomeTips] = useState(false);
 
   // 🔥 CENTRALIZED LOADER
   const loadData = () => {
@@ -101,6 +102,11 @@ export default function Home({ setTab }: any) {
       unsubscribeSync();
     };
   }, []);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem("homeWelcomeTipsDismissed") === "true";
+    setShowWelcomeTips(!dismissed && logs.length === 0 && classes.length === 0);
+  }, [logs.length, classes.length]);
 
   const getNextClassDate = (dayName?: string, time?: string) => {
     if (!dayName) return null;
@@ -261,6 +267,35 @@ return (
     </div>
 
     <div>
+      {showWelcomeTips && (
+        <div className="welcome-card">
+          <div className="welcome-card-head">
+            <div>
+              <div className="card-title">Welcome to Classense</div>
+              <small>Your quick start before you begin.</small>
+            </div>
+
+            <button
+              className="welcome-dismiss"
+              onClick={() => {
+                localStorage.setItem("homeWelcomeTipsDismissed", "true");
+                setShowWelcomeTips(false);
+              }}
+            >
+              Noted
+            </button>
+          </div>
+
+          <div className="welcome-list">
+            <div>1. Add your classes first so lessons stay organized.</div>
+            <div>2. Use New Lesson to plan now and finish later if needed.</div>
+            <div>3. Tap the mic to speak your lesson plan or attach a photo of handwritten notes.</div>
+            <div>4. Check Library, Calendar, and Reminders to keep everything in one place.</div>
+            <div>5. Save before leaving so your updates stay with the lesson.</div>
+          </div>
+        </div>
+      )}
+
       <div
         className="card empty-card friendly-card"
         onClick={() => {
@@ -634,6 +669,60 @@ return (
       cursor: pointer;
     }
 
+    .welcome-card {
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 247, 255, 0.96));
+      border: 1px solid rgba(96, 165, 250, 0.24);
+      border-radius: 22px;
+      padding: 18px 18px 16px;
+      margin-bottom: 16px;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.72),
+        0 18px 36px rgba(37, 99, 235, 0.1);
+    }
+
+    :global(.dark) .welcome-card {
+      background:
+        linear-gradient(145deg, rgba(19, 31, 49, 0.96), rgba(14, 24, 39, 0.97));
+      border: 1px solid rgba(96, 165, 250, 0.18);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 18px 36px rgba(2, 6, 23, 0.3);
+    }
+
+    .welcome-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .welcome-dismiss {
+      border: none;
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: rgba(37, 99, 235, 0.12);
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    :global(.dark) .welcome-dismiss {
+      background: rgba(96, 165, 250, 0.16);
+      color: #dbeafe;
+    }
+
+    .welcome-list {
+      display: grid;
+      gap: 8px;
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
     .card-title {
       font-size: 16px;
       font-weight: 650;
@@ -720,6 +809,18 @@ return (
 
       .hero-panel {
         padding: 18px;
+      }
+
+      .welcome-card {
+        padding: 16px;
+      }
+
+      .welcome-card-head {
+        flex-direction: column;
+      }
+
+      .welcome-dismiss {
+        align-self: flex-start;
       }
     }
   `}</style>
