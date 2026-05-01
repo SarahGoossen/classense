@@ -29,5 +29,10 @@ export const registerPushServiceWorker = async () => {
     throw new Error("Service workers are not supported in this browser.");
   }
 
-  return navigator.serviceWorker.register("/sw.js");
+  const registration = await navigator.serviceWorker.register("/sw.js", {
+    updateViaCache: "none",
+  });
+
+  await registration.update();
+  return registration;
 };

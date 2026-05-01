@@ -36,6 +36,7 @@ const MOBILE_TOP_NAV_HEIGHT = 72;
 const MOBILE_BOTTOM_NAV_HEIGHT = 76;
 
 const FIRED_REMINDER_STORAGE_KEY = "firedReminderIds";
+const LIVE_VERSION_STORAGE_KEY = "classenseLiveVersion";
 
 type ReminderRecord = {
   id: number;
@@ -66,6 +67,8 @@ function AppShell() {
   const [isMobile, setIsMobile] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [signOutQuote, setSignOutQuote] = useState("");
+  const [latestLiveVersion, setLatestLiveVersion] = useState("");
+  const [updateAvailable, setUpdateAvailable] = useState(false);
   const { authReady, cloudEnabled, user, signingOut } = useClassenseCloud();
 
   const renderTabButton = (tabKey: string, label: string) => {
@@ -173,6 +176,65 @@ function AppShell() {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let cancelled = false;
+
+    const checkForUpdate = async () => {
+      try {
+        const response = await fetch("/api/version", {
+          cache: "no-store",
+          headers: { "cache-control": "no-cache" },
+        });
+
+        if (!response.ok) return;
+        const data = await response.json();
+        const fetchedVersion = String(data.version || "").trim();
+        if (!fetchedVersion || cancelled) return;
+
+        const storedVersion = localStorage.getItem(LIVE_VERSION_STORAGE_KEY);
+        setLatestLiveVersion(fetchedVersion);
+
+        if (storedVersion && storedVersion !== fetchedVersion) {
+          setUpdateAvailable(true);
+          return;
+        }
+
+        localStorage.setItem(LIVE_VERSION_STORAGE_KEY, fetchedVersion);
+      } catch {
+        // If the version check fails, keep the current session running quietly.
+      }
+    };
+
+    void checkForUpdate();
+
+    const interval = window.setInterval(() => {
+      void checkForUpdate();
+    }, 60000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void checkForUpdate();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, []);
+
+  const applyLiveUpdate = () => {
+    if (latestLiveVersion) {
+      localStorage.setItem(LIVE_VERSION_STORAGE_KEY, latestLiveVersion);
+    }
+    window.location.reload();
+  };
+
   if (!authReady) {
     return (
       <main
@@ -256,6 +318,74 @@ function AppShell() {
           : 0,
       }}
     >
+      {updateAvailable && (
+        <div
+          style={{
+            position: "fixed",
+            top: isMobile ? "calc(env(safe-area-inset-top) + 10px)" : 14,
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(92vw, 520px)",
+            zIndex: 120,
+            padding: "12px 14px",
+            borderRadius: 18,
+            background: isDarkMode
+              ? "rgba(15, 23, 42, 0.96)"
+              : "rgba(255, 255, 255, 0.97)",
+            border: isDarkMode
+              ? "1px solid rgba(96, 165, 250, 0.28)"
+              : "1px solid rgba(59, 130, 246, 0.18)",
+            boxShadow: isDarkMode
+              ? "0 18px 40px rgba(2, 6, 23, 0.42)"
+              : "0 18px 40px rgba(15, 23, 42, 0.14)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontSize: 14,
+                fontWeight: 700,
+                color: "var(--text)",
+                marginBottom: 2,
+              }}
+            >
+              A new Classense update is ready.
+            </div>
+            <div
+              style={{
+                fontSize: 12,
+                lineHeight: 1.5,
+                color: "var(--muted)",
+              }}
+            >
+              Refresh now to load the latest version in this app.
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={applyLiveUpdate}
+            style={{
+              border: "none",
+              borderRadius: 999,
+              padding: "10px 14px",
+              background: "linear-gradient(135deg, #2563eb, #3b82f6)",
+              color: "#fff",
+              fontWeight: 700,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              boxShadow: "0 10px 22px rgba(37, 99, 235, 0.24)",
+            }}
+          >
+            Refresh
+          </button>
+        </div>
+      )}
+
       {isMobile ? (
         <nav
           style={{
