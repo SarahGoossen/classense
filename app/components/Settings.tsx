@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useClassenseCloud } from "../context/ClassenseCloud";
+import { createNoteImageUrl, uploadNoteImage } from "../lib/note-images";
 import { subscribeClassenseStorageSync } from "../utils/storageSync";
+import { getSupabaseBrowserClient } from "../lib/supabase";
 import {
   getOrCreatePushDeviceId,
   registerPushServiceWorker,
@@ -18,6 +20,19 @@ import {
 } from "../utils/theme";
 
 type ClassItem = { name: string };
+type BackupNoteImage = {
+  id: number;
+  name: string;
+  src?: string;
+  storagePath?: string;
+  backupData?: string;
+};
+
+type BackupLog = {
+  noteImages?: BackupNoteImage[];
+  [key: string]: unknown;
+};
+
 const CLASSENSE_STORAGE_KEYS = [
   "app_name",
   "lastUsedClass",
@@ -36,6 +51,7 @@ const CLASSENSE_STORAGE_KEYS = [
 ];
 
 export default function Settings() {
+  const supabase = getSupabaseBrowserClient();
   const importRef = useRef<HTMLInputElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [name, setName] = useState("");
@@ -124,7 +140,122 @@ export default function Settings() {
     location.reload();
   };
 
-  const handleExport = () => {
+  const blobToDataUrl = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(blob);
+    });
+
+  const exportLogsWithEmbeddedImages = async (logs: BackupLog[]) => {
+    let missingImageCount = 0;
+
+    const exportedLogs = await Promise.all(
+      logs.map(async (log) => {
+        if (!Array.isArray(log.noteImages) || log.noteImages.length === 0) {
+          return log;
+        }
+
+        const noteImages = await Promise.all(
+          log.noteImages.map(async (image) => {
+            if (image.src?.startsWith("data:")) {
+              return { ...image, backupData: image.src };
+            }
+
+            if (!image.storagePath || !supabase) {
+              return image;
+            }
+
+            try {
+              const signedUrl = await createNoteImageUrl(supabase, image.storagePath);
+              const response = await fetch(signedUrl);
+              if (!response.ok) {
+                throw new Error("Image download failed");
+              }
+
+              const blob = await response.blob();
+              return {
+                ...image,
+                backupData: await blobToDataUrl(blob),
+              };
+            } catch {
+              missingImageCount += 1;
+              return image;
+            }
+          })
+        );
+
+        return { ...log, noteImages };
+      })
+    );
+
+    return { exportedLogs, missingImageCount };
+  };
+
+  const restoreLogsFromBackup = async (logs: BackupLog[]) => {
+    return Promise.all(
+      logs.map(async (log) => {
+        if (!Array.isArray(log.noteImages) || log.noteImages.length === 0) {
+          return log;
+        }
+
+        const noteImages = await Promise.all(
+          log.noteImages.map(async (image) => {
+            if (!image.backupData) {
+              return image.storagePath
+                ? {
+                    id: image.id,
+                    name: image.name,
+                    storagePath: image.storagePath,
+                  }
+                : {
+                    id: image.id,
+                    name: image.name,
+                    src: image.src,
+                  };
+            }
+
+            if (supabase && cloudEnabled && user) {
+              try {
+                const response = await fetch(image.backupData);
+                const blob = await response.blob();
+                const extension = blob.type.split("/")[1] || "png";
+                const uploadFile = new File([blob], image.name || `lesson-note.${extension}`, {
+                  type: blob.type || "image/png",
+                });
+                const storagePath = await uploadNoteImage(supabase, user.id, uploadFile);
+                return {
+                  id: image.id,
+                  name: image.name,
+                  storagePath,
+                };
+              } catch {
+                return {
+                  id: image.id,
+                  name: image.name,
+                  src: image.backupData,
+                };
+              }
+            }
+
+            return {
+              id: image.id,
+              name: image.name,
+              src: image.backupData,
+            };
+          })
+        );
+
+        return { ...log, noteImages };
+      })
+    );
+  };
+
+  const handleExport = async () => {
+    const storedLogs = JSON.parse(localStorage.getItem("logs") || "[]") as BackupLog[];
+    const { exportedLogs, missingImageCount } = await exportLogsWithEmbeddedImages(storedLogs);
+
     const payload = {
       exportedAt: new Date().toISOString(),
       app_name: localStorage.getItem("app_name") || "",
@@ -135,7 +266,7 @@ export default function Settings() {
       prepTime: localStorage.getItem("prepTime") || "2h",
       app_theme: localStorage.getItem("app_theme") || theme,
       classes: JSON.parse(localStorage.getItem("classes") || "[]"),
-      logs: JSON.parse(localStorage.getItem("logs") || "[]"),
+      logs: exportedLogs,
       plannerEvents: JSON.parse(localStorage.getItem("plannerEvents") || "[]"),
       library: JSON.parse(localStorage.getItem("library") || "[]"),
       reminders: JSON.parse(localStorage.getItem("reminders") || "[]"),
@@ -151,6 +282,12 @@ export default function Settings() {
     link.download = `classense-backup-${stamp}.json`;
     link.click();
     URL.revokeObjectURL(url);
+
+    if (missingImageCount > 0) {
+      alert(
+        `Backup saved, but ${missingImageCount} notebook photo${missingImageCount === 1 ? "" : "s"} could not be embedded.`
+      );
+    }
   };
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -160,6 +297,7 @@ export default function Settings() {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
+      const restoredLogs = await restoreLogsFromBackup(data.logs || []);
 
       localStorage.setItem("app_name", data.app_name || "");
       localStorage.setItem("lastUsedClass", data.lastUsedClass || "");
@@ -169,7 +307,7 @@ export default function Settings() {
       localStorage.setItem("prepTime", data.prepTime || "2h");
       localStorage.setItem("app_theme", data.app_theme || "light");
       localStorage.setItem("classes", JSON.stringify(data.classes || []));
-      localStorage.setItem("logs", JSON.stringify(data.logs || []));
+      localStorage.setItem("logs", JSON.stringify(restoredLogs));
       localStorage.setItem("plannerEvents", JSON.stringify(data.plannerEvents || []));
       localStorage.setItem("library", JSON.stringify(data.library || []));
       localStorage.setItem("reminders", JSON.stringify(data.reminders || []));

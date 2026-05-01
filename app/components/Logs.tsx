@@ -153,6 +153,9 @@ export default function Logs() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseContentRef = useRef("");
+  const initialNoteImagePathsRef = useRef<Set<string>>(new Set());
+  const sessionUploadedPathsRef = useRef<Set<string>>(new Set());
+  const pendingDeletionPathsRef = useRef<Set<string>>(new Set());
 
   const today = () => new Date().toISOString().split("T")[0];
 
@@ -193,6 +196,7 @@ export default function Logs() {
             noteImages: resolvedImages,
           });
         });
+        resetNoteImageTracking(found.noteImages || []);
         localStorage.removeItem("openLogId");
       }
     }
@@ -209,6 +213,7 @@ export default function Logs() {
         setTagInput("");
         setReferences(found.references || "");
         void ensureImageUrls(found.noteImages || []).then(setNoteImages);
+        resetNoteImageTracking(found.noteImages || []);
         setEditingId(found.id);
         setSelectedLog(null);
         setIsEditor(true);
@@ -228,6 +233,7 @@ export default function Logs() {
       setTagInput("");
       setReferences("");
       setNoteImages([]);
+      resetNoteImageTracking([]);
       setEditingId(null);
       setSelectedLog(null);
       setIsEditor(true);
@@ -271,6 +277,34 @@ export default function Logs() {
   const saveLogs = (data: Log[]) => {
     setLogs(data);
     localStorage.setItem("logs", JSON.stringify(data));
+  };
+
+  const resetNoteImageTracking = (images: NoteImage[]) => {
+    initialNoteImagePathsRef.current = new Set(
+      images.map((image) => image.storagePath).filter(Boolean) as string[]
+    );
+    sessionUploadedPathsRef.current = new Set();
+    pendingDeletionPathsRef.current = new Set();
+  };
+
+  const cleanupUnsavedUploadedImages = async () => {
+    if (!supabase || !cloudEnabled || !user) return;
+
+    const pathsToRemove = Array.from(sessionUploadedPathsRef.current).filter(
+      (path) => !initialNoteImagePathsRef.current.has(path)
+    );
+
+    if (pathsToRemove.length === 0) return;
+
+    await Promise.all(
+      pathsToRemove.map(async (path) => {
+        try {
+          await removeNoteImage(supabase, path);
+        } catch {
+          // Best effort cleanup for canceled uploads.
+        }
+      })
+    );
   };
 
   const serializeNoteImages = (images: NoteImage[]) =>
@@ -322,6 +356,7 @@ export default function Logs() {
     setTagInput("");
     setReferences("");
     setNoteImages([]);
+    resetNoteImageTracking([]);
     setEditingId(null);
     setEnablePrepReminder(getStoredPrepReminder());
     setPrepReminderTime(getStoredPrepTime());
@@ -344,6 +379,7 @@ export default function Logs() {
         noteImages: resolvedImages,
       });
     });
+    resetNoteImageTracking(log.noteImages || []);
     setIsEditor(false);
   };
 
@@ -357,6 +393,7 @@ export default function Logs() {
     setTagInput("");
     setReferences(log.references || "");
     void ensureImageUrls(log.noteImages || []).then(setNoteImages);
+    resetNoteImageTracking(log.noteImages || []);
     setEditingId(log.id);
     setSelectedLog(null);
     setIsEditor(true);
@@ -383,7 +420,10 @@ export default function Logs() {
     showMessage("Duplicated");
   };
 
+  const resolveLogNoteImages = async (log: Log) => ensureImageUrls(log.noteImages || []);
+
   const handleShare = async (log: Log) => {
+    const noteImages = await resolveLogNoteImages(log);
     const text = [
       `Lesson: ${log.title}`,
       `Class: ${log.className}`,
@@ -398,10 +438,43 @@ export default function Logs() {
       "References / Links:",
       log.references,
       "",
-      `Notebook Photos: ${log.noteImages?.length || 0}`,
+      `Notebook Photos: ${noteImages.length || 0}`,
+      ...noteImages
+        .filter((image) => image.src)
+        .map((image, index) => `Photo ${index + 1}: ${image.src}`),
     ].join("\n");
 
     try {
+      if (navigator.share && noteImages.length > 0) {
+        const files = await Promise.all(
+          noteImages
+            .filter((image) => image.src)
+            .map(async (image, index) => {
+              const response = await fetch(image.src as string);
+              const blob = await response.blob();
+              const extension = blob.type.split("/")[1] || "png";
+              return new File(
+                [blob],
+                image.name || `lesson-note-${index + 1}.${extension}`,
+                { type: blob.type || "image/png" }
+              );
+            })
+        );
+
+        const shareData: ShareData = {
+          title: log.title,
+          text,
+        };
+
+        if (files.length > 0 && navigator.canShare?.({ files })) {
+          shareData.files = files;
+        }
+
+        await navigator.share(shareData);
+        showMessage("Shared ✓");
+        return;
+      }
+
       await navigator.clipboard.writeText(text);
       showMessage("Copied ✓");
     } catch {
@@ -415,12 +488,34 @@ export default function Logs() {
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;");
 
-  const handlePDF = (log: Log) => {
+  const handlePDF = async (log: Log) => {
+    const noteImages = await resolveLogNoteImages(log);
     const win = window.open("", "_blank");
     if (!win) {
       showMessage("Popup blocked");
       return;
     }
+
+    const imageMarkup = noteImages.length
+      ? `
+          <div class="section">
+            <strong>Notebook Photos</strong>
+            <div class="gallery">
+              ${noteImages
+                .filter((image) => image.src)
+                .map(
+                  (image) => `
+                    <figure class="photo-card">
+                      <img src="${escapeHtml(image.src || "")}" alt="${escapeHtml(image.name)}" />
+                      <figcaption>${escapeHtml(image.name)}</figcaption>
+                    </figure>
+                  `
+                )
+                .join("")}
+            </div>
+          </div>
+        `
+      : "";
 
     win.document.write(`
       <html>
@@ -432,6 +527,32 @@ export default function Logs() {
             .meta { color: #555; margin-bottom: 20px; }
             .box { border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; }
             .section { margin-top: 18px; }
+            .gallery {
+              display: grid;
+              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+              gap: 16px;
+              margin-top: 12px;
+            }
+            .photo-card {
+              margin: 0;
+              border: 1px solid #d7deea;
+              border-radius: 14px;
+              padding: 10px;
+              break-inside: avoid;
+              background: #f8fbff;
+            }
+            .photo-card img {
+              width: 100%;
+              max-height: 420px;
+              object-fit: contain;
+              border-radius: 10px;
+              background: #fff;
+            }
+            .photo-card figcaption {
+              margin-top: 8px;
+              font-size: 12px;
+              color: #475569;
+            }
           </style>
         </head>
         <body>
@@ -452,6 +573,8 @@ export default function Logs() {
             <strong>References / Links</strong>
             <div class="box">${escapeHtml(log.references)}</div>
           </div>
+
+          ${imageMarkup}
         </body>
       </html>
     `);
@@ -487,6 +610,7 @@ export default function Logs() {
           if (supabase && cloudEnabled && user) {
             const storagePath = await uploadNoteImage(supabase, user.id, file);
             const signedUrl = await createNoteImageUrl(supabase, storagePath);
+            sessionUploadedPathsRef.current.add(storagePath);
 
             return {
               id: Date.now() + Math.floor(Math.random() * 100000),
@@ -531,11 +655,19 @@ export default function Logs() {
     if (!window.confirm("Remove this notebook photo?")) return;
 
     if (image.storagePath && supabase && cloudEnabled && user) {
-      try {
-        await removeNoteImage(supabase, image.storagePath);
-      } catch {
-        showMessage("We couldn't remove that cloud photo");
-        return;
+      const isNewUpload = sessionUploadedPathsRef.current.has(image.storagePath);
+      const isExistingImage = initialNoteImagePathsRef.current.has(image.storagePath);
+
+      if (isNewUpload && !isExistingImage) {
+        try {
+          await removeNoteImage(supabase, image.storagePath);
+          sessionUploadedPathsRef.current.delete(image.storagePath);
+        } catch {
+          showMessage("We couldn't remove that cloud photo");
+          return;
+        }
+      } else {
+        pendingDeletionPathsRef.current.add(image.storagePath);
       }
     }
 
@@ -742,9 +874,14 @@ export default function Logs() {
     setIsDictating(true);
   };
 
-  const handleEditorClose = () => {
+  const handleEditorClose = async () => {
     const hasPartialDraft = Boolean(
-      selectedClass || title.trim() || content.trim() || references.trim() || tags.length
+      selectedClass ||
+        title.trim() ||
+        content.trim() ||
+        references.trim() ||
+        tags.length ||
+        noteImages.length
     );
 
     const existingReminders = JSON.parse(localStorage.getItem("reminders") || "[]");
@@ -787,21 +924,23 @@ export default function Logs() {
       );
     }
 
+    await cleanupUnsavedUploadedImages();
+    resetNoteImageTracking([]);
     setIsEditor(false);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!title.trim() || !date || !lessonTime) {
       showMessage("Title, date, and time are required");
       return;
     }
 
     const mergedTags = Array.from(new Set([...tags, ...aiSuggestedTags]));
-const classTime = lessonTime || getClassTime(selectedClass);
+    const classTime = lessonTime || getClassTime(selectedClass);
     const payload: Log = {
       id: editingId ?? Date.now(),
       className: selectedClass || "Unassigned",
- classTime,
+      classTime,
       title: title.trim(),
       date,
       content,
@@ -867,6 +1006,19 @@ const classTime = lessonTime || getClassTime(selectedClass);
       );
     }
 
+    if (supabase && cloudEnabled && user && pendingDeletionPathsRef.current.size > 0) {
+      await Promise.all(
+        Array.from(pendingDeletionPathsRef.current).map(async (path) => {
+          try {
+            await removeNoteImage(supabase, path);
+          } catch {
+            // Best effort cleanup after a lesson save.
+          }
+        })
+      );
+    }
+
+    resetNoteImageTracking(payload.noteImages || []);
     setIsEditor(false);
     setDraftReminderId(null);
     setSelectedLog(payload);
