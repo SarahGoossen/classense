@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { calculateReminderTime } from "../utils/reminders";
 import { subscribeClassenseStorageSync } from "../utils/storageSync";
+import { getSupabaseBrowserClient } from "../lib/supabase";
+import { createNoteImageUrl, removeNoteImage, uploadNoteImage } from "../lib/note-images";
+import { useClassenseCloud } from "../context/ClassenseCloud";
 
 declare global {
   interface Window {
@@ -38,6 +41,13 @@ type SpeechRecognitionErrorLike = {
 
 type ClassItem = { name: string; time?: string };
 
+type NoteImage = {
+  id: number;
+  name: string;
+  src?: string;
+  storagePath?: string;
+};
+
 type Log = {
   id: number;
   className: string;
@@ -47,6 +57,7 @@ type Log = {
   content: string;
   tags: string[];
   references: string;
+  noteImages?: NoteImage[];
 };
 const formatTime = (t?: string) => {
   if (!t) return "";
@@ -107,6 +118,8 @@ const getFollowUpReminderDate = (option: string, customValue: string) => {
 };
 
 export default function Logs() {
+  const supabase = getSupabaseBrowserClient();
+  const { cloudEnabled, user } = useClassenseCloud();
   const [isMobile, setIsMobile] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -123,6 +136,8 @@ export default function Logs() {
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [references, setReferences] = useState("");
+  const [noteImages, setNoteImages] = useState<NoteImage[]>([]);
+  const [activeNoteImage, setActiveNoteImage] = useState<NoteImage | null>(null);
 
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("");
@@ -172,7 +187,12 @@ export default function Logs() {
     if (openId) {
       const found = parsedLogs.find((log) => log.id === Number(openId));
       if (found) {
-        setSelectedLog(found);
+        void ensureImageUrls(found.noteImages || []).then((resolvedImages) => {
+          setSelectedLog({
+            ...found,
+            noteImages: resolvedImages,
+          });
+        });
         localStorage.removeItem("openLogId");
       }
     }
@@ -188,6 +208,7 @@ export default function Logs() {
         setTags(found.tags || []);
         setTagInput("");
         setReferences(found.references || "");
+        void ensureImageUrls(found.noteImages || []).then(setNoteImages);
         setEditingId(found.id);
         setSelectedLog(null);
         setIsEditor(true);
@@ -206,6 +227,7 @@ export default function Logs() {
       setTags([]);
       setTagInput("");
       setReferences("");
+      setNoteImages([]);
       setEditingId(null);
       setSelectedLog(null);
       setIsEditor(true);
@@ -251,6 +273,39 @@ export default function Logs() {
     localStorage.setItem("logs", JSON.stringify(data));
   };
 
+  const serializeNoteImages = (images: NoteImage[]) =>
+    images.map((image) =>
+      image.storagePath
+        ? {
+            id: image.id,
+            name: image.name,
+            storagePath: image.storagePath,
+          }
+        : {
+            id: image.id,
+            name: image.name,
+            src: image.src,
+          }
+    );
+
+  const ensureImageUrls = async (images: NoteImage[]) => {
+    if (!supabase) return images;
+
+    const resolved = await Promise.all(
+      images.map(async (image) => {
+        if (image.src || !image.storagePath) return image;
+        try {
+          const signedUrl = await createNoteImageUrl(supabase, image.storagePath);
+          return { ...image, src: signedUrl };
+        } catch {
+          return image;
+        }
+      })
+    );
+
+    return resolved;
+  };
+
   const getClassTime = (className: string) => {
     const found = classes.find((c) => c.name === className);
     return found?.time || "18:00";
@@ -266,6 +321,7 @@ export default function Logs() {
     setTags([]);
     setTagInput("");
     setReferences("");
+    setNoteImages([]);
     setEditingId(null);
     setEnablePrepReminder(getStoredPrepReminder());
     setPrepReminderTime(getStoredPrepTime());
@@ -282,7 +338,12 @@ export default function Logs() {
   };
 
   const handleOpen = (log: Log) => {
-    setSelectedLog(log);
+    void ensureImageUrls(log.noteImages || []).then((resolvedImages) => {
+      setSelectedLog({
+        ...log,
+        noteImages: resolvedImages,
+      });
+    });
     setIsEditor(false);
   };
 
@@ -295,6 +356,7 @@ export default function Logs() {
     setTags(log.tags || []);
     setTagInput("");
     setReferences(log.references || "");
+    void ensureImageUrls(log.noteImages || []).then(setNoteImages);
     setEditingId(log.id);
     setSelectedLog(null);
     setIsEditor(true);
@@ -335,6 +397,8 @@ export default function Logs() {
       "",
       "References / Links:",
       log.references,
+      "",
+      `Notebook Photos: ${log.noteImages?.length || 0}`,
     ].join("\n");
 
     try {
@@ -411,6 +475,71 @@ export default function Logs() {
 
   const removeTag = (tag: string) => {
     setTags((prev) => prev.filter((t) => t !== tag));
+  };
+
+  const handleNoteImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    try {
+      const images = await Promise.all(
+        files.map(async (file) => {
+          if (supabase && cloudEnabled && user) {
+            const storagePath = await uploadNoteImage(supabase, user.id, file);
+            const signedUrl = await createNoteImageUrl(supabase, storagePath);
+
+            return {
+              id: Date.now() + Math.floor(Math.random() * 100000),
+              name: file.name || "Notebook photo",
+              storagePath,
+              src: signedUrl,
+            } satisfies NoteImage;
+          }
+
+          return await new Promise<NoteImage>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () =>
+              resolve({
+                id: Date.now() + Math.floor(Math.random() * 100000),
+                name: file.name || "Notebook photo",
+                src: String(reader.result || ""),
+              });
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          });
+        })
+      );
+
+      setNoteImages((prev) => [...prev, ...images]);
+      showMessage(
+        supabase && cloudEnabled && user
+          ? images.length === 1
+            ? "Notebook photo uploaded"
+            : "Notebook photos uploaded"
+          : images.length === 1
+            ? "Notebook photo added locally"
+            : "Notebook photos added locally"
+      );
+    } catch {
+      showMessage("We couldn't add that photo");
+    } finally {
+      event.target.value = "";
+    }
+  };
+
+  const handleRemoveNoteImage = async (image: NoteImage) => {
+    if (!window.confirm("Remove this notebook photo?")) return;
+
+    if (image.storagePath && supabase && cloudEnabled && user) {
+      try {
+        await removeNoteImage(supabase, image.storagePath);
+      } catch {
+        showMessage("We couldn't remove that cloud photo");
+        return;
+      }
+    }
+
+    setNoteImages((prev) => prev.filter((item) => item.id !== image.id));
   };
 
   const toggleFilterTag = (tag: string) => {
@@ -670,15 +799,16 @@ export default function Logs() {
     const mergedTags = Array.from(new Set([...tags, ...aiSuggestedTags]));
 const classTime = lessonTime || getClassTime(selectedClass);
     const payload: Log = {
-  id: editingId ?? Date.now(),
-  className: selectedClass || "Unassigned",
+      id: editingId ?? Date.now(),
+      className: selectedClass || "Unassigned",
  classTime,
-  title: title.trim(),
-  date,
-  content,
-  tags: mergedTags,
-  references,
-};
+      title: title.trim(),
+      date,
+      content,
+      tags: mergedTags,
+      references,
+      noteImages: serializeNoteImages(noteImages),
+    };
 
     const updated =
       editingId !== null
@@ -775,8 +905,100 @@ const classTime = lessonTime || getClassTime(selectedClass);
 
   const Toast = () =>
     message ? (
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-black text-white px-4 py-2 rounded-xl shadow-lg z-50">
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          display: "grid",
+          placeItems: "center",
+          zIndex: 60,
+          pointerEvents: "none",
+          padding: 20,
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(15,23,42,0.92)",
+            color: "#fff",
+            padding: "14px 18px",
+            borderRadius: 16,
+            boxShadow: "0 18px 40px rgba(15,23,42,0.24)",
+            maxWidth: 320,
+            width: "max-content",
+            textAlign: "center",
+            fontWeight: 600,
+          }}
+        >
         {message}
+        </div>
+      </div>
+    ) : null;
+
+  const NoteImageModal = () =>
+    activeNoteImage ? (
+      <div
+        style={noteImageModalOverlayStyle}
+        onClick={() => setActiveNoteImage(null)}
+      >
+        <div
+          style={noteImageModalCardStyle}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
+                Notebook Photo
+              </div>
+              <div
+                style={{
+                  fontSize: 13,
+                  color: "#475569",
+                  marginTop: 2,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {activeNoteImage.name}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setActiveNoteImage(null)}
+              style={whiteBtn}
+            >
+              Close
+            </button>
+          </div>
+
+          <div
+            style={{
+              overflow: "auto",
+              borderRadius: 18,
+              background: "rgba(226,232,240,0.45)",
+              padding: 8,
+            }}
+          >
+            <img
+              src={activeNoteImage.src}
+              alt={activeNoteImage.name}
+              style={{
+                width: "100%",
+                height: "auto",
+                objectFit: "contain",
+                borderRadius: 14,
+                display: "block",
+              }}
+            />
+          </div>
+        </div>
       </div>
     ) : null;
 
@@ -1110,6 +1332,41 @@ const classTime = lessonTime || getClassTime(selectedClass);
     background: "rgba(148,163,184,0.16)",
   };
 
+  const noteImageModalOverlayStyle: React.CSSProperties = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15,23,42,0.82)",
+    display: "grid",
+    placeItems: "center",
+    padding: 20,
+    zIndex: 80,
+  };
+
+  const noteImageModalCardStyle: React.CSSProperties = {
+    width: "min(92vw, 980px)",
+    maxHeight: "90vh",
+    background: "rgba(255,255,255,0.96)",
+    borderRadius: 24,
+    padding: 18,
+    display: "grid",
+    gap: 12,
+    boxShadow: "0 28px 60px rgba(15,23,42,0.34)",
+  };
+
+  const noteUploadCardStyle: React.CSSProperties = {
+    ...cardStyle,
+    background: "var(--premium-panel-strong)",
+    borderRadius: 18,
+    padding: 16,
+  };
+
+  const noteImageGridStyle: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
+    gap: 12,
+    marginTop: 12,
+  };
+
   const followUpReminderPreview = (() => {
     const reminderAt = getFollowUpReminderDate(
       followUpReminderOption,
@@ -1130,6 +1387,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
     return (
       <div style={shellStyle}>
         <Toast />
+        <NoteImageModal />
         <div style={{ maxWidth: "100%", margin: "0 auto", padding: isMobile ? "8px 0 16px" : "16px" }}>
             <div
               style={{
@@ -1549,6 +1807,74 @@ const classTime = lessonTime || getClassTime(selectedClass);
                   resize: "vertical",
                 }}
               />
+
+              <div style={noteUploadCardStyle}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Notebook Photos</div>
+                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+                  Snap a notebook page or add a screenshot so it stays with this lesson as a reference.
+                </div>
+                <label
+                  style={{
+                    ...whiteBtn,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginTop: 12,
+                    cursor: "pointer",
+                  }}
+                >
+                  Add Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    capture="environment"
+                    onChange={handleNoteImageUpload}
+                    style={{ display: "none" }}
+                  />
+                </label>
+
+                {noteImages.length > 0 && (
+                  <div style={noteImageGridStyle}>
+                    {noteImages.map((image) => (
+                      <div
+                        key={image.id}
+                        style={{
+                          background: "rgba(255,255,255,0.56)",
+                          border: "1px solid rgba(148,163,184,0.16)",
+                          borderRadius: 16,
+                          padding: 8,
+                          display: "grid",
+                          gap: 8,
+                        }}
+                      >
+                        <img
+                          src={image.src}
+                          alt={image.name}
+                          onClick={() => setActiveNoteImage(image)}
+                          style={{
+                            width: "100%",
+                            aspectRatio: "1 / 1",
+                            objectFit: "cover",
+                            borderRadius: 12,
+                            cursor: "zoom-in",
+                          }}
+                        />
+                        <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
+                          {image.name}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleRemoveNoteImage(image)}
+                          style={whiteBtn}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
   
               <button
                 onClick={handleSave}
@@ -1577,6 +1903,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
     return (
       <div style={shellStyle}>
         <Toast />
+        <NoteImageModal />
   
         <div style={{ marginBottom: 14 }}>
           <button onClick={() => setSelectedLog(null)} style={whiteBtn}>← Back</button>
@@ -1636,6 +1963,48 @@ const classTime = lessonTime || getClassTime(selectedClass);
                 })}
             </div>
           </div>
+
+          {selectedLog.noteImages && selectedLog.noteImages.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Notebook Photos</div>
+              <div style={noteImageGridStyle}>
+                {selectedLog.noteImages.map((image) => (
+                  <a
+                    key={image.id}
+                    href={image.src}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      setActiveNoteImage(image);
+                    }}
+                    style={{
+                      background: "rgba(255,255,255,0.56)",
+                      border: "1px solid rgba(148,163,184,0.16)",
+                      borderRadius: 16,
+                      padding: 8,
+                      display: "grid",
+                      gap: 8,
+                      textDecoration: "none",
+                    }}
+                  >
+                    <img
+                      src={image.src}
+                      alt={image.name}
+                      style={{
+                        width: "100%",
+                        aspectRatio: "1 / 1",
+                        objectFit: "cover",
+                        borderRadius: 12,
+                        cursor: "zoom-in",
+                      }}
+                    />
+                    <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
+                      {image.name}
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
   
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={() => handleEdit(selectedLog)} style={darkBtn}>Edit</button>
@@ -1652,6 +2021,7 @@ const classTime = lessonTime || getClassTime(selectedClass);
   return (
     <div style={shellStyle}>
       <Toast />
+      <NoteImageModal />
       <style jsx global>{`
         @keyframes dictationPulse {
           0%,
