@@ -1093,7 +1093,14 @@ export default function Logs() {
         onClick={() => setActiveNoteImage(null)}
       >
         <div
-          style={noteImageModalCardStyle}
+          style={{
+            ...noteImageModalCardStyle,
+            width: isMobile ? "100%" : noteImageModalCardStyle.width,
+            maxHeight: isMobile ? "100dvh" : noteImageModalCardStyle.maxHeight,
+            height: isMobile ? "100dvh" : "auto",
+            borderRadius: isMobile ? 0 : noteImageModalCardStyle.borderRadius,
+            padding: isMobile ? 0 : noteImageModalCardStyle.padding,
+          }}
           onClick={(event) => event.stopPropagation()}
         >
           <div
@@ -1102,6 +1109,12 @@ export default function Logs() {
               justifyContent: "space-between",
               alignItems: "center",
               gap: 12,
+              padding: isMobile ? "16px 16px 12px" : 0,
+              position: "sticky",
+              top: 0,
+              zIndex: 2,
+              background: "rgba(255,255,255,0.96)",
+              borderBottom: isMobile ? "1px solid rgba(148,163,184,0.18)" : "none",
             }}
           >
             <div style={{ minWidth: 0 }}>
@@ -1133,20 +1146,26 @@ export default function Logs() {
           <div
             style={{
               overflow: "auto",
-              borderRadius: 18,
+              WebkitOverflowScrolling: "touch",
+              flex: 1,
+              borderRadius: isMobile ? 0 : 18,
               background: "rgba(226,232,240,0.45)",
-              padding: 8,
+              padding: isMobile ? 12 : 8,
+              touchAction: "pan-x pan-y pinch-zoom",
             }}
           >
             <img
               src={activeNoteImage.src}
               alt={activeNoteImage.name}
               style={{
-                width: "100%",
+                width: "auto",
+                maxWidth: "100%",
+                minWidth: "100%",
                 height: "auto",
                 objectFit: "contain",
                 borderRadius: 14,
                 display: "block",
+                margin: "0 auto",
               }}
             />
           </div>
@@ -1501,8 +1520,10 @@ export default function Logs() {
     borderRadius: 24,
     padding: 18,
     display: "grid",
+    gridTemplateRows: "auto minmax(0, 1fr)",
     gap: 12,
     boxShadow: "0 28px 60px rgba(15,23,42,0.34)",
+    overflow: "hidden",
   };
 
   const noteUploadCardStyle: React.CSSProperties = {
