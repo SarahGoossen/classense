@@ -1089,13 +1089,17 @@ export default function Logs() {
   const NoteImageModal = () =>
     activeNoteImage ? (
       <div
-        style={noteImageModalOverlayStyle}
+        style={{
+          ...noteImageModalOverlayStyle,
+          padding: isMobile ? 0 : noteImageModalOverlayStyle.padding,
+          placeItems: isMobile ? "stretch" : "center",
+        }}
         onClick={() => setActiveNoteImage(null)}
       >
         <div
           style={{
             ...noteImageModalCardStyle,
-            width: isMobile ? "100%" : noteImageModalCardStyle.width,
+            width: isMobile ? "100vw" : noteImageModalCardStyle.width,
             maxHeight: isMobile ? "100dvh" : noteImageModalCardStyle.maxHeight,
             height: isMobile ? "100dvh" : "auto",
             borderRadius: isMobile ? 0 : noteImageModalCardStyle.borderRadius,
@@ -1103,45 +1107,49 @@ export default function Logs() {
           }}
           onClick={(event) => event.stopPropagation()}
         >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              gap: 12,
-              padding: isMobile ? "16px 16px 12px" : 0,
-              position: "sticky",
-              top: 0,
-              zIndex: 2,
-              background: "rgba(255,255,255,0.96)",
-              borderBottom: isMobile ? "1px solid rgba(148,163,184,0.18)" : "none",
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
-                Notebook Photo
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "#475569",
-                  marginTop: 2,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {activeNoteImage.name}
-              </div>
-            </div>
+          {isMobile ? (
             <button
               type="button"
               onClick={() => setActiveNoteImage(null)}
-              style={whiteBtn}
+              style={noteImageFloatingCloseStyle}
             >
               Close
             </button>
-          </div>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
+                  Notebook Photo
+                </div>
+                <div
+                  style={{
+                    fontSize: 13,
+                    color: "#475569",
+                    marginTop: 2,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {activeNoteImage.name}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveNoteImage(null)}
+                style={whiteBtn}
+              >
+                Close
+              </button>
+            </div>
+          )}
 
           <div
             style={{
@@ -1149,21 +1157,46 @@ export default function Logs() {
               WebkitOverflowScrolling: "touch",
               flex: 1,
               borderRadius: isMobile ? 0 : 18,
-              background: "rgba(226,232,240,0.45)",
-              padding: isMobile ? 12 : 8,
+              background: isMobile ? "#0f172a" : "rgba(226,232,240,0.45)",
+              padding: isMobile ? "calc(env(safe-area-inset-top) + 64px) 12px 24px" : 8,
               touchAction: "pan-x pan-y pinch-zoom",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
             }}
           >
+            {isMobile && (
+              <div
+                style={{
+                  width: "100%",
+                  marginBottom: 12,
+                  color: "rgba(255,255,255,0.8)",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 15 }}>Notebook Photo</div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    marginTop: 2,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {activeNoteImage.name}
+                </div>
+              </div>
+            )}
             <img
               src={activeNoteImage.src}
               alt={activeNoteImage.name}
               style={{
-                width: "auto",
-                maxWidth: "100%",
-                minWidth: "100%",
+                width: "100%",
+                maxWidth: isMobile ? "100%" : "100%",
                 height: "auto",
                 objectFit: "contain",
-                borderRadius: 14,
+                borderRadius: isMobile ? 16 : 14,
                 display: "block",
                 margin: "0 auto",
               }}
@@ -1524,6 +1557,23 @@ export default function Logs() {
     gap: 12,
     boxShadow: "0 28px 60px rgba(15,23,42,0.34)",
     overflow: "hidden",
+  };
+
+  const noteImageFloatingCloseStyle: React.CSSProperties = {
+    position: "fixed",
+    top: "calc(env(safe-area-inset-top) + 12px)",
+    right: 12,
+    zIndex: 3,
+    padding: "10px 14px",
+    borderRadius: 999,
+    border: "1px solid rgba(255,255,255,0.22)",
+    background: "rgba(15,23,42,0.82)",
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 700,
+    boxShadow: "0 12px 24px rgba(2,6,23,0.28)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
   };
 
   const noteUploadCardStyle: React.CSSProperties = {
