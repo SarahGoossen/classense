@@ -63,7 +63,7 @@ const formatReminderDate = (value?: string) => {
   });
 };
 
-export default function Home({ setTab }: any) {
+export default function Home({ setTab, setSelectedLogId }: any) {
   const userName = getUserName();
   const [logs, setLogs] = useState<Log[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -330,6 +330,7 @@ return (
           key={log.id}
           className="card"
           onClick={() => {
+            setSelectedLogId?.(log.id);
             localStorage.setItem("openLogId", log.id.toString());
             setTab("logs");
           }}

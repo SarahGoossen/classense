@@ -125,6 +125,14 @@ const normalizeLog = (raw: unknown, index: number): Log | null => {
       typeof candidate.updatedAt === "string" ? candidate.updatedAt : undefined,
   };
 };
+
+const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) =>
+  Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    }),
+  ]);
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -183,7 +191,7 @@ const getFollowUpReminderDate = (option: string, customValue: string) => {
   return laterToday;
 };
 
-export default function Logs() {
+export default function Logs({ selectedLogId }: { selectedLogId?: number | null }) {
   const supabase = getSupabaseBrowserClient();
   const { cloudEnabled, user, persistSnapshotNow } = useClassenseCloud();
   const [isMobile, setIsMobile] = useState(false);
@@ -262,11 +270,16 @@ export default function Logs() {
     if (openId) {
       const found = parsedLogs.find((log) => log.id === Number(openId));
       if (found) {
+        setSelectedLog(found);
         void ensureImageUrls(found.noteImages || []).then((resolvedImages) => {
-          setSelectedLog({
-            ...found,
-            noteImages: resolvedImages,
-          });
+          setSelectedLog((current) =>
+            current?.id === found.id
+              ? {
+                  ...found,
+                  noteImages: resolvedImages,
+                }
+              : current
+          );
         });
         resetNoteImageTracking(found.noteImages || []);
         localStorage.removeItem("openLogId");
@@ -284,6 +297,7 @@ export default function Logs() {
         setTags(found.tags || []);
         setTagInput("");
         setReferences(found.references || "");
+        setNoteImages(found.noteImages || []);
         void ensureImageUrls(found.noteImages || []).then(setNoteImages);
         resetNoteImageTracking(found.noteImages || []);
         setEditingId(found.id);
@@ -330,6 +344,13 @@ export default function Logs() {
     const unsubscribeSync = subscribeClassenseStorageSync(loadCoreData);
     return () => unsubscribeSync();
   }, []);
+
+  useEffect(() => {
+    if (!selectedLogId) return;
+    const found = logs.find((log) => log.id === selectedLogId);
+    if (!found) return;
+    handleOpen(found);
+  }, [logs, selectedLogId]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 640);
@@ -418,7 +439,11 @@ export default function Logs() {
       images.map(async (image) => {
         if (image.src || !image.storagePath) return image;
         try {
-          const signedUrl = await createNoteImageUrl(supabase, image.storagePath);
+          const signedUrl = await withTimeout(
+            createNoteImageUrl(supabase, image.storagePath),
+            6000,
+            "Attachment preview"
+          );
           return { ...image, src: signedUrl };
         } catch {
           return image;
@@ -462,11 +487,16 @@ export default function Logs() {
   };
 
   const handleOpen = (log: Log) => {
+    setSelectedLog(log);
     void ensureImageUrls(log.noteImages || []).then((resolvedImages) => {
-      setSelectedLog({
-        ...log,
-        noteImages: resolvedImages,
-      });
+      setSelectedLog((current) =>
+        current?.id === log.id
+          ? {
+              ...log,
+              noteImages: resolvedImages,
+            }
+          : current
+      );
     });
     resetNoteImageTracking(log.noteImages || []);
     setIsEditor(false);
@@ -481,6 +511,7 @@ export default function Logs() {
     setTags(log.tags || []);
     setTagInput("");
     setReferences(log.references || "");
+    setNoteImages(log.noteImages || []);
     void ensureImageUrls(log.noteImages || []).then(setNoteImages);
     resetNoteImageTracking(log.noteImages || []);
     setEditingId(log.id);
@@ -712,12 +743,20 @@ export default function Logs() {
       const results = await Promise.allSettled(
         files.map(async (file) => {
           if (supabase && cloudEnabled && user) {
-            const storagePath = await uploadNoteImage(supabase, user.id, file);
+            const storagePath = await withTimeout(
+              uploadNoteImage(supabase, user.id, file),
+              12000,
+              "Attachment upload"
+            );
             sessionUploadedPathsRef.current.add(storagePath);
 
             let src: string | undefined;
             try {
-              src = await createNoteImageUrl(supabase, storagePath);
+              src = await withTimeout(
+                createNoteImageUrl(supabase, storagePath),
+                6000,
+                "Attachment preview"
+              );
             } catch {
               src = URL.createObjectURL(file);
             }
@@ -2280,20 +2319,38 @@ export default function Logs() {
                           gap: 8,
                         }}
                       >
-                        {isImageAttachment(image) ? (
-                          <img
-                            src={image.src}
-                            alt={image.name}
-                            onClick={() => setActiveNoteImage(image)}
-                            style={{
-                              width: "100%",
-                              aspectRatio: "1 / 1",
-                              objectFit: "cover",
-                              borderRadius: 12,
-                              cursor: "zoom-in",
-                            }}
-                          />
-                        ) : (
+                    {isImageAttachment(image) ? (
+                      image.src ? (
+                        <img
+                          src={image.src}
+                          alt={image.name}
+                          onClick={() => setActiveNoteImage(image)}
+                          style={{
+                            width: "100%",
+                            aspectRatio: "1 / 1",
+                            objectFit: "cover",
+                            borderRadius: 12,
+                            cursor: "zoom-in",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            minHeight: 110,
+                            borderRadius: 12,
+                            background: "rgba(226,232,240,0.85)",
+                            display: "grid",
+                            placeItems: "center",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                            textAlign: "center",
+                            padding: 12,
+                          }}
+                        >
+                          Preview loading
+                        </div>
+                      )
+                    ) : (
                           <button
                             type="button"
                             onClick={() => image.src && window.open(image.src, "_blank", "noopener,noreferrer")}
@@ -2442,17 +2499,35 @@ export default function Logs() {
                     }}
                   >
                     {isImageAttachment(image) ? (
-                      <img
-                        src={image.src}
-                        alt={image.name}
-                        style={{
-                          width: "100%",
-                          aspectRatio: "1 / 1",
-                          objectFit: "cover",
-                          borderRadius: 12,
-                          cursor: "zoom-in",
-                        }}
-                      />
+                      image.src ? (
+                        <img
+                          src={image.src}
+                          alt={image.name}
+                          style={{
+                            width: "100%",
+                            aspectRatio: "1 / 1",
+                            objectFit: "cover",
+                            borderRadius: 12,
+                            cursor: "zoom-in",
+                          }}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            minHeight: 110,
+                            borderRadius: 12,
+                            background: "rgba(226,232,240,0.85)",
+                            display: "grid",
+                            placeItems: "center",
+                            color: "#0f172a",
+                            fontWeight: 700,
+                            textAlign: "center",
+                            padding: 12,
+                          }}
+                        >
+                          Preview loading
+                        </div>
+                      )
                     ) : (
                       <div
                         style={{
