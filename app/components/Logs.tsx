@@ -61,6 +61,70 @@ type Log = {
   noteImages?: NoteImage[];
   updatedAt?: string;
 };
+
+const normalizeNoteImages = (images: unknown) => {
+  if (!Array.isArray(images)) return [];
+
+  return images
+    .map((image, index) => {
+      if (!image) return null;
+
+      if (typeof image === "string") {
+        return {
+          id: Date.now() + index,
+          name: `Attachment ${index + 1}`,
+          src: image,
+        } satisfies NoteImage;
+      }
+
+      if (typeof image !== "object") return null;
+
+      const candidate = image as Partial<NoteImage>;
+      if (!candidate.src && !candidate.storagePath) return null;
+
+      return {
+        id:
+          typeof candidate.id === "number"
+            ? candidate.id
+            : Date.now() + index,
+        name: candidate.name || `Attachment ${index + 1}`,
+        src: candidate.src,
+        storagePath: candidate.storagePath,
+        contentType: candidate.contentType,
+      } satisfies NoteImage;
+    })
+    .filter(Boolean) as NoteImage[];
+};
+
+const normalizeLog = (raw: unknown, index: number): Log | null => {
+  if (!raw || typeof raw !== "object") return null;
+
+  const candidate = raw as Partial<Log> & Record<string, unknown>;
+  const title = typeof candidate.title === "string" ? candidate.title : "";
+  const className =
+    typeof candidate.className === "string" ? candidate.className : "Unassigned";
+  const date = typeof candidate.date === "string" ? candidate.date : "";
+  const content = typeof candidate.content === "string" ? candidate.content : "";
+  const references =
+    typeof candidate.references === "string" ? candidate.references : "";
+
+  return {
+    id: typeof candidate.id === "number" ? candidate.id : Date.now() + index,
+    className,
+    classTime:
+      typeof candidate.classTime === "string" ? candidate.classTime : undefined,
+    title,
+    date,
+    content,
+    tags: Array.isArray(candidate.tags)
+      ? candidate.tags.filter((tag): tag is string => typeof tag === "string")
+      : [],
+    references,
+    noteImages: normalizeNoteImages(candidate.noteImages),
+    updatedAt:
+      typeof candidate.updatedAt === "string" ? candidate.updatedAt : undefined,
+  };
+};
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -146,6 +210,7 @@ export default function Logs() {
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [enablePrepReminder, setEnablePrepReminder] = useState(true);
   const [prepReminderTime, setPrepReminderTime] = useState("2h");
   const [isDictating, setIsDictating] = useState(false);
@@ -156,9 +221,6 @@ export default function Logs() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseContentRef = useRef("");
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
-  const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const initialNoteImagePathsRef = useRef<Set<string>>(new Set());
   const sessionUploadedPathsRef = useRef<Set<string>>(new Set());
   const pendingDeletionPathsRef = useRef<Set<string>>(new Set());
@@ -175,45 +237,10 @@ export default function Logs() {
     const savedLogs = localStorage.getItem("logs");
 
     const parsedClasses: ClassItem[] = savedClasses ? JSON.parse(savedClasses) : [];
-    const normalizeNoteImages = (images: unknown) => {
-      if (!Array.isArray(images)) return [];
-
-      return images
-        .map((image, index) => {
-          if (!image) return null;
-
-          if (typeof image === "string") {
-            return {
-              id: Date.now() + index,
-              name: `Attachment ${index + 1}`,
-              src: image,
-            } satisfies NoteImage;
-          }
-
-          if (typeof image !== "object") return null;
-
-          const candidate = image as Partial<NoteImage>;
-          if (!candidate.src && !candidate.storagePath) return null;
-
-          return {
-            id:
-              typeof candidate.id === "number"
-                ? candidate.id
-                : Date.now() + index,
-            name: candidate.name || `Attachment ${index + 1}`,
-            src: candidate.src,
-            storagePath: candidate.storagePath,
-            contentType: candidate.contentType,
-          } satisfies NoteImage;
-        })
-        .filter(Boolean) as NoteImage[];
-    };
-
     const parsedLogs: Log[] = savedLogs
-      ? (JSON.parse(savedLogs) as Log[]).map((log) => ({
-          ...log,
-          noteImages: normalizeNoteImages(log.noteImages),
-        }))
+      ? (JSON.parse(savedLogs) as unknown[])
+          .map((log, index) => normalizeLog(log, index))
+          .filter(Boolean) as Log[]
       : [];
 
     setClasses(parsedClasses);
@@ -320,8 +347,11 @@ export default function Logs() {
   }, [prepReminderTime]);
 
   const saveLogs = (data: Log[]) => {
-    setLogs(data);
-    localStorage.setItem("logs", JSON.stringify(data));
+    const normalized = data
+      .map((log, index) => normalizeLog(log, index))
+      .filter(Boolean) as Log[];
+    setLogs(normalized);
+    localStorage.setItem("logs", JSON.stringify(normalized));
   };
 
   const resetNoteImageTracking = (images: NoteImage[]) => {
@@ -379,22 +409,6 @@ export default function Logs() {
     if (attachment.contentType?.includes("word")) return "DOC";
     if (attachment.contentType?.startsWith("text/")) return "TXT";
     return "FILE";
-  };
-
-  const openAttachmentPicker = (picker: "camera" | "library" | "file") => {
-    const input =
-      picker === "camera"
-        ? cameraInputRef.current
-        : picker === "library"
-          ? photoLibraryInputRef.current
-          : fileInputRef.current;
-
-    if (!input) {
-      showMessage("This attachment picker is not ready yet. Try again.");
-      return;
-    }
-
-    input.click();
   };
 
   const ensureImageUrls = async (images: NoteImage[]) => {
@@ -508,10 +522,10 @@ export default function Logs() {
       "Lesson Plan:",
       log.content,
       "",
-      `Tags: ${log.tags.join(", ")}`,
+      `Tags: ${(log.tags || []).join(", ")}`,
       "",
       "References / Links:",
-      log.references,
+      String(log.references || ""),
       "",
       `Notebook Photos: ${noteImages.length || 0}`,
       ...noteImages
@@ -654,12 +668,12 @@ export default function Logs() {
 
           <div class="section">
             <strong>Tags</strong>
-            <div>${escapeHtml(log.tags.join(", "))}</div>
+            <div>${escapeHtml((log.tags || []).join(", "))}</div>
           </div>
 
           <div class="section">
             <strong>References / Links</strong>
-            <div class="box">${escapeHtml(log.references)}</div>
+            <div class="box">${escapeHtml(String(log.references || ""))}</div>
           </div>
 
           ${imageMarkup}
@@ -693,19 +707,26 @@ export default function Logs() {
     const files = Array.from(event.target.files || []);
     if (files.length === 0) return;
 
+    setIsUploadingAttachments(true);
     try {
-      const images = await Promise.all(
+      const results = await Promise.allSettled(
         files.map(async (file) => {
           if (supabase && cloudEnabled && user) {
             const storagePath = await uploadNoteImage(supabase, user.id, file);
-            const signedUrl = await createNoteImageUrl(supabase, storagePath);
             sessionUploadedPathsRef.current.add(storagePath);
+
+            let src: string | undefined;
+            try {
+              src = await createNoteImageUrl(supabase, storagePath);
+            } catch {
+              src = URL.createObjectURL(file);
+            }
 
             return {
               id: Date.now() + Math.floor(Math.random() * 100000),
-              name: file.name || "Notebook photo",
+              name: file.name || "Attachment",
               storagePath,
-              src: signedUrl,
+              src,
               contentType: file.type,
             } satisfies NoteImage;
           }
@@ -715,7 +736,7 @@ export default function Logs() {
             reader.onload = () =>
               resolve({
                 id: Date.now() + Math.floor(Math.random() * 100000),
-                name: file.name || "Notebook photo",
+                name: file.name || "Attachment",
                 src: String(reader.result || ""),
                 contentType: file.type,
               });
@@ -725,19 +746,29 @@ export default function Logs() {
         })
       );
 
-      setNoteImages((prev) => [...prev, ...images]);
-      showMessage(
-        supabase && cloudEnabled && user
-          ? images.length === 1
-            ? "Attachment uploaded"
-            : "Attachments uploaded"
-          : images.length === 1
-            ? "Attachment added locally"
-            : "Attachments added locally"
-      );
+      const uploaded = results
+        .filter(
+          (result): result is PromiseFulfilledResult<NoteImage> =>
+            result.status === "fulfilled"
+        )
+        .map((result) => result.value);
+      const failedCount = results.length - uploaded.length;
+
+      if (uploaded.length > 0) {
+        setNoteImages((prev) => [...prev, ...uploaded]);
+      }
+
+      if (uploaded.length > 0 && failedCount === 0) {
+        showMessage(uploaded.length === 1 ? "Attachment uploaded" : "Attachments uploaded");
+      } else if (uploaded.length > 0) {
+        showMessage("Some attachments uploaded, but at least one failed");
+      } else {
+        showMessage("We couldn't add that attachment");
+      }
     } catch {
       showMessage("We couldn't add that attachment");
     } finally {
+      setIsUploadingAttachments(false);
       event.target.value = "";
     }
   };
@@ -830,11 +861,11 @@ export default function Logs() {
     return logs
       .filter((log) => (editingId ? log.id !== editingId : true))
       .filter((log) => {
-        const hay = `${log.title} ${log.content} ${log.tags.join(" ")} ${log.className}`.toLowerCase();
+        const hay = `${log.title} ${log.content} ${(log.tags || []).join(" ")} ${log.className}`.toLowerCase();
         return (
           (selectedClass && log.className === selectedClass) ||
           signalWords.some((word) => hay.includes(word)) ||
-          aiSuggestedTags.some((tag) => log.tags.includes(tag))
+          aiSuggestedTags.some((tag) => (log.tags || []).includes(tag))
         );
       })
       .slice(0, 3);
@@ -1026,6 +1057,11 @@ export default function Logs() {
       return;
     }
 
+    if (isUploadingAttachments) {
+      showMessage("Wait for the attachment to finish uploading");
+      return;
+    }
+
     setIsSaving(true);
     setMessage("Saving...");
     try {
@@ -1113,7 +1149,12 @@ export default function Logs() {
         );
       }
 
-      const syncResult = await persistSnapshotNow();
+      const syncResult = await Promise.race([
+        persistSnapshotNow(),
+        new Promise<{ ok: false; error: string }>((resolve) => {
+          window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 12000);
+        }),
+      ]);
 
       resetNoteImageTracking(payload.noteImages || []);
       setIsEditor(false);
@@ -1131,7 +1172,7 @@ export default function Logs() {
   };
 
   const allTags = useMemo(
-    () => Array.from(new Set(logs.flatMap((log) => log.tags))).sort(),
+    () => Array.from(new Set(logs.flatMap((log) => log.tags || []))).sort(),
     [logs]
   );
 
@@ -1145,8 +1186,8 @@ export default function Logs() {
         log.classTime || "",
         log.date,
         log.content,
-        log.references,
-        log.tags.join(" "),
+        String(log.references || ""),
+        (log.tags || []).join(" "),
       ]
         .join(" ")
         .toLowerCase();
@@ -1154,7 +1195,7 @@ export default function Logs() {
       const matchesSearch = !q || text.includes(q);
       const matchesClass = !filterClass || log.className === filterClass;
       const matchesTags =
-        filterTags.length === 0 || filterTags.every((tag) => log.tags.includes(tag));
+        filterTags.length === 0 || filterTags.every((tag) => (log.tags || []).includes(tag));
 
       return matchesSearch && matchesClass && matchesTags;
     });
@@ -1688,6 +1729,18 @@ export default function Logs() {
     padding: 16,
   };
 
+  const visuallyHiddenInputStyle: React.CSSProperties = {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: "hidden",
+    clip: "rect(0, 0, 0, 0)",
+    whiteSpace: "nowrap",
+    border: 0,
+  };
+
   const noteImageGridStyle: React.CSSProperties = {
     display: "grid",
     gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
@@ -2142,36 +2195,33 @@ export default function Logs() {
                   Add a notebook photo, choose one from your library, or attach a file so it stays with this lesson.
                 </div>
                 <input
-                  ref={cameraInputRef}
+                  id="lesson-attachment-camera"
                   type="file"
                   accept="image/*"
                   multiple
                   capture="environment"
                   onChange={handleNoteImageUpload}
-                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                  tabIndex={-1}
+                  style={visuallyHiddenInputStyle}
                 />
                 <input
-                  ref={photoLibraryInputRef}
+                  id="lesson-attachment-library"
                   type="file"
                   accept="image/*"
                   multiple
                   onChange={handleNoteImageUpload}
-                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                  tabIndex={-1}
+                  style={visuallyHiddenInputStyle}
                 />
                 <input
-                  ref={fileInputRef}
+                  id="lesson-attachment-file"
                   type="file"
                   accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   multiple
                   onChange={handleNoteImageUpload}
-                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                  tabIndex={-1}
+                  style={visuallyHiddenInputStyle}
                 />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                  <button
-                    type="button"
+                  <label
+                    htmlFor="lesson-attachment-camera"
                     style={{
                       ...whiteBtn,
                       display: "inline-flex",
@@ -2179,13 +2229,12 @@ export default function Logs() {
                       justifyContent: "center",
                       cursor: "pointer"
                     }}
-                    onClick={() => openAttachmentPicker("camera")}
                   >
                     Take Photo
-                  </button>
+                  </label>
 
-                  <button
-                    type="button"
+                  <label
+                    htmlFor="lesson-attachment-library"
                     style={{
                       ...whiteBtn,
                       display: "inline-flex",
@@ -2193,13 +2242,12 @@ export default function Logs() {
                       justifyContent: "center",
                       cursor: "pointer"
                     }}
-                    onClick={() => openAttachmentPicker("library")}
                   >
                     Photo Library
-                  </button>
+                  </label>
 
-                  <button
-                    type="button"
+                  <label
+                    htmlFor="lesson-attachment-file"
                     style={{
                       ...whiteBtn,
                       display: "inline-flex",
@@ -2207,11 +2255,16 @@ export default function Logs() {
                       justifyContent: "center",
                       cursor: "pointer"
                     }}
-                    onClick={() => openAttachmentPicker("file")}
                   >
                     Add File
-                  </button>
+                  </label>
                 </div>
+
+                {isUploadingAttachments && (
+                  <div style={{ marginTop: 10, fontSize: 13, color: "var(--muted)" }}>
+                    Uploading attachment...
+                  </div>
+                )}
 
                 {noteImages.length > 0 && (
                   <div style={noteImageGridStyle}>
@@ -2278,7 +2331,7 @@ export default function Logs() {
               <button
                 onClick={handleSave}
                 style={metallicBlueBtn}
-                disabled={isSaving}
+                disabled={isSaving || isUploadingAttachments}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform =
                     "translateY(-2px) scale(1.01)";
@@ -2291,7 +2344,7 @@ export default function Logs() {
                     "inset 0 1px 2px rgba(255,255,255,0.35), 0 10px 22px rgba(37,99,235,0.25)";
                 }}
               >
-                {isSaving ? "Saving..." : "Save"}
+                {isSaving ? "Saving..." : isUploadingAttachments ? "Uploading..." : "Save"}
               </button>
             </div>
           </div>
@@ -2320,7 +2373,7 @@ export default function Logs() {
           </div>
   
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
-            {selectedLog.tags.map((tag) => (
+            {(selectedLog.tags || []).map((tag) => (
               <span
                 key={tag}
                 onClick={() => {
@@ -2338,7 +2391,7 @@ export default function Logs() {
             <div style={{ fontWeight: 600, marginBottom: 8 }}>References / Links</div>
   
             <div>
-              {(selectedLog.references || "")
+              {String(selectedLog.references || "")
                 .split("\n")
                 .map((line, i) => {
                   const match = line.match(/(https?:\/\/[^\s]+|www\.[^\s]+|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
@@ -2615,9 +2668,9 @@ export default function Logs() {
               <span>{formatTime(log.classTime || getClassTime(log.className))}</span>
             </div>
   
-            {log.tags.length > 0 && (
+            {(log.tags || []).length > 0 && (
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                {log.tags.map((tag) => (
+                {(log.tags || []).map((tag) => (
                   <span
                     key={tag}
                     onClick={(e) => {
