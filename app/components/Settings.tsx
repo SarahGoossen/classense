@@ -54,6 +54,7 @@ const CLASSENSE_STORAGE_KEYS = [
 export default function Settings() {
   const supabase = getSupabaseBrowserClient();
   const importRef = useRef<HTMLInputElement | null>(null);
+  const isIosDeviceRef = useRef(false);
   const [isMobile, setIsMobile] = useState(false);
   const [name, setName] = useState("");
   const [defaultClass, setDefaultClass] = useState("");
@@ -66,9 +67,60 @@ export default function Settings() {
   const [prepTime, setPrepTime] = useState("2h");
   const [theme, setTheme] = useState<ThemeMode>("light");
   const [notificationStatus, setNotificationStatus] = useState("Checking browser support...");
+  const [notificationHelp, setNotificationHelp] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
+  const [pushSupported, setPushSupported] = useState(false);
   const { cloudEnabled, user, syncStatus, signOut, signingOut } = useClassenseCloud();
+
+  const detectPushSupport = () => {
+    if (typeof window === "undefined") {
+      return {
+        supported: false,
+        message: "Notifications can only be checked inside the app.",
+        help: "",
+      };
+    }
+
+    const isIos =
+      /iPad|iPhone|iPod/.test(window.navigator.userAgent) ||
+      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
+    isIosDeviceRef.current = isIos;
+
+    const isStandalone =
+      window.matchMedia?.("(display-mode: standalone)")?.matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+    const hasNotification = "Notification" in window;
+    const hasServiceWorker = "serviceWorker" in navigator;
+    const hasPushManager = "PushManager" in window;
+
+    if (isIos && !isStandalone) {
+      return {
+        supported: false,
+        message: "Open Classense from your Home Screen to use notifications on iPhone or iPad.",
+        help: "Safari on iPhone only allows push notifications for installed Home Screen apps.",
+      };
+    }
+
+    if (!hasNotification || !hasServiceWorker || !hasPushManager) {
+      return {
+        supported: false,
+        message: "Notifications are not available in this browser.",
+        help: isIos
+          ? "On iPhone, install Classense to your Home Screen and open it there."
+          : "Try a browser and device that supports web push notifications.",
+      };
+    }
+
+    return {
+      supported: true,
+      message: `Browser permission: ${Notification.permission}`,
+      help: isIos
+        ? "Notifications work from the installed Classense Home Screen app."
+        : "Turn on push for this browser, then send a test notification.",
+    };
+  };
 
   const loadSettings = async () => {
     const savedName = localStorage.getItem("app_name");
@@ -93,12 +145,15 @@ export default function Settings() {
     setTheme(savedTheme);
     applyTheme(savedTheme);
 
-    if (typeof window === "undefined" || !("Notification" in window) || !("serviceWorker" in navigator)) {
-      setNotificationStatus("This browser does not support Classense notifications.");
+    const pushState = detectPushSupport();
+    setPushSupported(pushState.supported);
+    setNotificationStatus(pushState.message);
+    setNotificationHelp(pushState.help);
+
+    if (!pushState.supported) {
+      setPushEnabled(false);
       return;
     }
-
-    setNotificationStatus(`Browser permission: ${Notification.permission}`);
 
     const registration = await navigator.serviceWorker.ready;
     const subscription = await registration.pushManager.getSubscription();
@@ -334,9 +389,13 @@ export default function Settings() {
     if (
       typeof window === "undefined" ||
       !("Notification" in window) ||
-      !("serviceWorker" in navigator)
+      !("serviceWorker" in navigator) ||
+      !pushSupported
     ) {
-      alert("This browser does not support notifications.");
+      const pushState = detectPushSupport();
+      setPushSupported(pushState.supported);
+      setNotificationStatus(pushState.message);
+      setNotificationHelp(pushState.help);
       return;
     }
 
@@ -348,9 +407,13 @@ export default function Settings() {
     if (
       typeof window === "undefined" ||
       !("Notification" in window) ||
-      !("serviceWorker" in navigator)
+      !("serviceWorker" in navigator) ||
+      !pushSupported
     ) {
-      alert("This browser does not support push notifications.");
+      const pushState = detectPushSupport();
+      setPushSupported(pushState.supported);
+      setNotificationStatus(pushState.message);
+      setNotificationHelp(pushState.help);
       return;
     }
 
@@ -597,54 +660,61 @@ export default function Settings() {
         <div style={sectionTitle}>Notifications</div>
 
         <div style={helper}>
-          Turn on push for this browser, then test the connection. Once VAPID keys and subscription storage are configured in production, this becomes the base for real deployed notifications.
+          {pushSupported
+            ? "Turn on push for this browser, then test the connection."
+            : "Notifications are only shown when this device and browser support them."}
         </div>
         <div style={statusAmberBubble}>{notificationStatus}</div>
+        {notificationHelp ? <div style={helper}>{notificationHelp}</div> : null}
 
-        <button
-          style={secondaryBtn}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-          }}
-          onClick={() => void handleNotificationPermission()}
-        >
-          Enable Browser Notifications
-        </button>
+        {pushSupported ? (
+          <>
+            <button
+              style={secondaryBtn}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "none";
+              }}
+              onClick={() => void handleNotificationPermission()}
+            >
+              Enable Browser Notifications
+            </button>
 
-        <button
-          style={secondaryBtn}
-          disabled={pushBusy}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-          }}
-          onClick={() => void (pushEnabled ? handleDisablePush() : handleEnablePush())}
-        >
-          {pushBusy
-            ? "Working..."
-            : pushEnabled
-              ? "Disable Push on This Device"
-              : "Connect Push on This Device"}
-        </button>
+            <button
+              style={secondaryBtn}
+              disabled={pushBusy}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "none";
+              }}
+              onClick={() => void (pushEnabled ? handleDisablePush() : handleEnablePush())}
+            >
+              {pushBusy
+                ? "Working..."
+                : pushEnabled
+                  ? "Disable Push on This Device"
+                  : "Connect Push on This Device"}
+            </button>
 
-        <button
-          style={secondaryBtn}
-          disabled={pushBusy || !pushEnabled}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = "translateY(-2px)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = "none";
-          }}
-          onClick={() => void handleSendTestPush()}
-        >
-          Send Test Push
-        </button>
+            <button
+              style={secondaryBtn}
+              disabled={pushBusy || !pushEnabled}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "none";
+              }}
+              onClick={() => void handleSendTestPush()}
+            >
+              Send Test Push
+            </button>
+          </>
+        ) : null}
       </div>
 
       {/* DATA */}

@@ -145,6 +145,7 @@ export default function Logs() {
   const [filterClass, setFilterClass] = useState("");
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const [enablePrepReminder, setEnablePrepReminder] = useState(true);
   const [prepReminderTime, setPrepReminderTime] = useState("2h");
   const [isDictating, setIsDictating] = useState(false);
@@ -155,6 +156,9 @@ export default function Logs() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseContentRef = useRef("");
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const initialNoteImagePathsRef = useRef<Set<string>>(new Set());
   const sessionUploadedPathsRef = useRef<Set<string>>(new Set());
   const pendingDeletionPathsRef = useRef<Set<string>>(new Set());
@@ -336,6 +340,22 @@ export default function Logs() {
     if (attachment.contentType?.includes("word")) return "DOC";
     if (attachment.contentType?.startsWith("text/")) return "TXT";
     return "FILE";
+  };
+
+  const openAttachmentPicker = (picker: "camera" | "library" | "file") => {
+    const input =
+      picker === "camera"
+        ? cameraInputRef.current
+        : picker === "library"
+          ? photoLibraryInputRef.current
+          : fileInputRef.current;
+
+    if (!input) {
+      showMessage("This attachment picker is not ready yet. Try again.");
+      return;
+    }
+
+    input.click();
   };
 
   const ensureImageUrls = async (images: NoteImage[]) => {
@@ -670,14 +690,14 @@ export default function Logs() {
       showMessage(
         supabase && cloudEnabled && user
           ? images.length === 1
-            ? "Notebook photo uploaded"
-            : "Notebook photos uploaded"
+            ? "Attachment uploaded"
+            : "Attachments uploaded"
           : images.length === 1
-            ? "Notebook photo added locally"
-            : "Notebook photos added locally"
+            ? "Attachment added locally"
+            : "Attachments added locally"
       );
     } catch {
-      showMessage("We couldn't add that photo");
+      showMessage("We couldn't add that attachment");
     } finally {
       event.target.value = "";
     }
@@ -967,100 +987,106 @@ export default function Logs() {
       return;
     }
 
-    const mergedTags = Array.from(new Set([...tags, ...aiSuggestedTags]));
-    const classTime = lessonTime || getClassTime(selectedClass);
-    const payload: Log = {
-      id: editingId ?? Date.now(),
-      className: selectedClass || "Unassigned",
-      classTime,
-      title: title.trim(),
-      date,
-      content,
-      tags: mergedTags,
-      references,
-      noteImages: serializeNoteImages(noteImages),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const updated =
-      editingId !== null
-        ? logs.map((log) => (log.id === editingId ? payload : log))
-        : [payload, ...logs];
-
-    saveLogs(updated);
-    if (selectedClass) {
-      localStorage.setItem("lastUsedClass", selectedClass);
-    }
-
-    const remindersEnabled = getStoredRemindersEnabled();
-    const existing = JSON.parse(localStorage.getItem("reminders") || "[]");
-    const withoutDraftReminder = existing.filter((reminder: any) => reminder.id !== draftReminderId);
-
-    if (remindersEnabled && enablePrepReminder) {
-      const fullDateTime = date && classTime
-        ? new Date(`${date}T${classTime}:00`)
-        : new Date();
-
-      if (isNaN(fullDateTime.getTime())) {
-        showMessage("Invalid class date/time");
-        return;
-      }
-
-      const reminderTime = calculateReminderTime(
-        fullDateTime.toISOString(),
-        prepReminderTime
-      );
-
-      const newReminder = {
-        id: Date.now(),
-        logId: payload.id,
-        title: payload.title,
-        className: payload.className,
-        lessonDate: payload.date,
+    setIsSaving(true);
+    setMessage("Saving...");
+    try {
+      const mergedTags = Array.from(new Set([...tags, ...aiSuggestedTags]));
+      const classTime = lessonTime || getClassTime(selectedClass);
+      const payload: Log = {
+        id: editingId ?? Date.now(),
+        className: selectedClass || "Unassigned",
         classTime,
-        remindAt:
-          reminderTime && !isNaN(new Date(reminderTime).getTime())
-            ? new Date(reminderTime).toISOString()
-            : "",
-        type: "prep",
+        title: title.trim(),
+        date,
+        content,
+        tags: mergedTags,
+        references,
+        noteImages: serializeNoteImages(noteImages),
+        updatedAt: new Date().toISOString(),
       };
 
-      localStorage.setItem(
-        "reminders",
-        JSON.stringify([
-          newReminder,
-          ...withoutDraftReminder.filter((reminder: any) => reminder.logId !== payload.id),
-        ])
-      );
-    } else {
-      localStorage.setItem(
-        "reminders",
-        JSON.stringify(withoutDraftReminder.filter((reminder: any) => reminder.logId !== payload.id))
-      );
+      const updated =
+        editingId !== null
+          ? logs.map((log) => (log.id === editingId ? payload : log))
+          : [payload, ...logs];
+
+      saveLogs(updated);
+      if (selectedClass) {
+        localStorage.setItem("lastUsedClass", selectedClass);
+      }
+
+      const remindersEnabled = getStoredRemindersEnabled();
+      const existing = JSON.parse(localStorage.getItem("reminders") || "[]");
+      const withoutDraftReminder = existing.filter((reminder: any) => reminder.id !== draftReminderId);
+
+      if (remindersEnabled && enablePrepReminder) {
+        const fullDateTime = date && classTime
+          ? new Date(`${date}T${classTime}:00`)
+          : new Date();
+
+        if (isNaN(fullDateTime.getTime())) {
+          showMessage("Invalid class date/time");
+          return;
+        }
+
+        const reminderTime = calculateReminderTime(
+          fullDateTime.toISOString(),
+          prepReminderTime
+        );
+
+        const newReminder = {
+          id: Date.now(),
+          logId: payload.id,
+          title: payload.title,
+          className: payload.className,
+          lessonDate: payload.date,
+          classTime,
+          remindAt:
+            reminderTime && !isNaN(new Date(reminderTime).getTime())
+              ? new Date(reminderTime).toISOString()
+              : "",
+          type: "prep",
+        };
+
+        localStorage.setItem(
+          "reminders",
+          JSON.stringify([
+            newReminder,
+            ...withoutDraftReminder.filter((reminder: any) => reminder.logId !== payload.id),
+          ])
+        );
+      } else {
+        localStorage.setItem(
+          "reminders",
+          JSON.stringify(withoutDraftReminder.filter((reminder: any) => reminder.logId !== payload.id))
+        );
+      }
+
+      if (supabase && cloudEnabled && user && pendingDeletionPathsRef.current.size > 0) {
+        await Promise.all(
+          Array.from(pendingDeletionPathsRef.current).map(async (path) => {
+            try {
+              await removeNoteImage(supabase, path);
+            } catch {
+              // Best effort cleanup after a lesson save.
+            }
+          })
+        );
+      }
+
+      const syncResult = await persistSnapshotNow();
+
+      resetNoteImageTracking(payload.noteImages || []);
+      setIsEditor(false);
+      setDraftReminderId(null);
+      setSelectedLog({
+        ...payload,
+        noteImages: noteImages.map((image) => ({ ...image })),
+      });
+      showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
+    } finally {
+      setIsSaving(false);
     }
-
-    if (supabase && cloudEnabled && user && pendingDeletionPathsRef.current.size > 0) {
-      await Promise.all(
-        Array.from(pendingDeletionPathsRef.current).map(async (path) => {
-          try {
-            await removeNoteImage(supabase, path);
-          } catch {
-            // Best effort cleanup after a lesson save.
-          }
-        })
-      );
-    }
-
-    const syncResult = await persistSnapshotNow();
-
-    resetNoteImageTracking(payload.noteImages || []);
-    setIsEditor(false);
-    setDraftReminderId(null);
-    setSelectedLog({
-      ...payload,
-      noteImages: noteImages.map((image) => ({ ...image })),
-    });
-    showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
   };
 
   const allTags = useMemo(
@@ -2074,64 +2100,76 @@ export default function Logs() {
                 <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
                   Add a notebook photo, choose one from your library, or attach a file so it stays with this lesson.
                 </div>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  capture="environment"
+                  onChange={handleNoteImageUpload}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  tabIndex={-1}
+                />
+                <input
+                  ref={photoLibraryInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleNoteImageUpload}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  tabIndex={-1}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple
+                  onChange={handleNoteImageUpload}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  tabIndex={-1}
+                />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                  <label
+                  <button
+                    type="button"
                     style={{
                       ...whiteBtn,
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      cursor: "pointer",
+                      cursor: "pointer"
                     }}
+                    onClick={() => openAttachmentPicker("camera")}
                   >
                     Take Photo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      capture="environment"
-                      onChange={handleNoteImageUpload}
-                      style={{ display: "none" }}
-                    />
-                  </label>
+                  </button>
 
-                  <label
+                  <button
+                    type="button"
                     style={{
                       ...whiteBtn,
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      cursor: "pointer",
+                      cursor: "pointer"
                     }}
+                    onClick={() => openAttachmentPicker("library")}
                   >
                     Photo Library
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleNoteImageUpload}
-                      style={{ display: "none" }}
-                    />
-                  </label>
+                  </button>
 
-                  <label
+                  <button
+                    type="button"
                     style={{
                       ...whiteBtn,
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      cursor: "pointer",
+                      cursor: "pointer"
                     }}
+                    onClick={() => openAttachmentPicker("file")}
                   >
                     Add File
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      multiple
-                      onChange={handleNoteImageUpload}
-                      style={{ display: "none" }}
-                    />
-                  </label>
+                  </button>
                 </div>
 
                 {noteImages.length > 0 && (

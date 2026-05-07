@@ -236,6 +236,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
   const cloudEnabled = isSupabaseConfigured();
   const applyingRemoteRef = useRef(false);
   const uploadTimerRef = useRef<number | null>(null);
+  const signingOutRef = useRef(false);
 
   const pullRemoteSnapshot = useCallback(
     async (userId: string): Promise<Snapshot | null> => {
@@ -361,6 +362,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     supabase.auth.getUser().then(async ({ data }) => {
       if (!active) return;
+      if (signingOutRef.current && data.user) return;
       setUser(data.user ?? null);
       setSigningOut(false);
       setAuthReady(true);
@@ -370,6 +372,14 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (signingOutRef.current && session?.user) {
+        return;
+      }
+
+      if (!session?.user) {
+        signingOutRef.current = false;
+      }
+
       setUser(session?.user ?? null);
       setSigningOut(false);
       setAuthReady(true);
@@ -470,12 +480,24 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     if (!supabase) return;
+    signingOutRef.current = true;
     setSigningOut(true);
-    setAuthReady(true);
+    setAuthReady(false);
     setUser(null);
     setSyncStatus("Signing you out...");
 
-    await supabase.auth.signOut();
+    if (uploadTimerRef.current) {
+      window.clearTimeout(uploadTimerRef.current);
+      uploadTimerRef.current = null;
+    }
+
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } finally {
+      if (typeof window !== "undefined") {
+        window.location.replace(window.location.pathname);
+      }
+    }
   };
 
   return (
