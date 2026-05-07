@@ -156,9 +156,6 @@ export default function Logs() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseContentRef = useRef("");
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
-  const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const initialNoteImagePathsRef = useRef<Set<string>>(new Set());
   const sessionUploadedPathsRef = useRef<Set<string>>(new Set());
   const pendingDeletionPathsRef = useRef<Set<string>>(new Set());
@@ -340,22 +337,6 @@ export default function Logs() {
     if (attachment.contentType?.includes("word")) return "DOC";
     if (attachment.contentType?.startsWith("text/")) return "TXT";
     return "FILE";
-  };
-
-  const openAttachmentPicker = (picker: "camera" | "library" | "file") => {
-    const input =
-      picker === "camera"
-        ? cameraInputRef.current
-        : picker === "library"
-          ? photoLibraryInputRef.current
-          : fileInputRef.current;
-
-    if (!input) {
-      showMessage("This attachment picker is not ready yet. Try again.");
-      return;
-    }
-
-    input.click();
   };
 
   const ensureImageUrls = async (images: NoteImage[]) => {
@@ -1645,6 +1626,26 @@ export default function Logs() {
     background: "var(--premium-panel-strong)",
     borderRadius: 18,
     padding: 16,
+    position: "relative",
+  };
+
+  const attachmentPickerButtonStyle: React.CSSProperties = {
+    ...whiteBtn,
+    position: "relative",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    overflow: "hidden",
+  };
+
+  const attachmentNativeInputStyle: React.CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    opacity: 0,
+    cursor: "pointer",
   };
 
   const noteImageGridStyle: React.CSSProperties = {
@@ -2100,76 +2101,40 @@ export default function Logs() {
                 <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
                   Add a notebook photo, choose one from your library, or attach a file so it stays with this lesson.
                 </div>
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  capture="environment"
-                  onChange={handleNoteImageUpload}
-                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                  tabIndex={-1}
-                />
-                <input
-                  ref={photoLibraryInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleNoteImageUpload}
-                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                  tabIndex={-1}
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  multiple
-                  onChange={handleNoteImageUpload}
-                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
-                  tabIndex={-1}
-                />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                  <button
-                    type="button"
-                    style={{
-                      ...whiteBtn,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer"
-                    }}
-                    onClick={() => openAttachmentPicker("camera")}
-                  >
+                  <label style={attachmentPickerButtonStyle}>
                     Take Photo
-                  </button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      capture="environment"
+                      onChange={handleNoteImageUpload}
+                      style={attachmentNativeInputStyle}
+                    />
+                  </label>
 
-                  <button
-                    type="button"
-                    style={{
-                      ...whiteBtn,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer"
-                    }}
-                    onClick={() => openAttachmentPicker("library")}
-                  >
+                  <label style={attachmentPickerButtonStyle}>
                     Photo Library
-                  </button>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleNoteImageUpload}
+                      style={attachmentNativeInputStyle}
+                    />
+                  </label>
 
-                  <button
-                    type="button"
-                    style={{
-                      ...whiteBtn,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer"
-                    }}
-                    onClick={() => openAttachmentPicker("file")}
-                  >
+                  <label style={attachmentPickerButtonStyle}>
                     Add File
-                  </button>
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      multiple
+                      onChange={handleNoteImageUpload}
+                      style={attachmentNativeInputStyle}
+                    />
+                  </label>
                 </div>
 
                 {noteImages.length > 0 && (
@@ -2218,6 +2183,9 @@ export default function Logs() {
                         <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
                           {image.name}
                         </div>
+                        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>
+                          Need to replace it? Remove this one, then add the new file.
+                        </div>
                         <button
                           type="button"
                           onClick={() => void handleRemoveNoteImage(image)}
@@ -2234,6 +2202,7 @@ export default function Logs() {
               <button
                 onClick={handleSave}
                 style={metallicBlueBtn}
+                disabled={isSaving}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform =
                     "translateY(-2px) scale(1.01)";
@@ -2246,7 +2215,7 @@ export default function Logs() {
                     "inset 0 1px 2px rgba(255,255,255,0.35), 0 10px 22px rgba(37,99,235,0.25)";
                 }}
               >
-                Save
+                {isSaving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
