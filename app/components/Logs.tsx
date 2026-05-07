@@ -156,6 +156,9 @@ export default function Logs() {
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const dictationBufferRef = useRef("");
   const dictationBaseContentRef = useRef("");
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const photoLibraryInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const initialNoteImagePathsRef = useRef<Set<string>>(new Set());
   const sessionUploadedPathsRef = useRef<Set<string>>(new Set());
   const pendingDeletionPathsRef = useRef<Set<string>>(new Set());
@@ -172,7 +175,46 @@ export default function Logs() {
     const savedLogs = localStorage.getItem("logs");
 
     const parsedClasses: ClassItem[] = savedClasses ? JSON.parse(savedClasses) : [];
-    const parsedLogs: Log[] = savedLogs ? JSON.parse(savedLogs) : [];
+    const normalizeNoteImages = (images: unknown) => {
+      if (!Array.isArray(images)) return [];
+
+      return images
+        .map((image, index) => {
+          if (!image) return null;
+
+          if (typeof image === "string") {
+            return {
+              id: Date.now() + index,
+              name: `Attachment ${index + 1}`,
+              src: image,
+            } satisfies NoteImage;
+          }
+
+          if (typeof image !== "object") return null;
+
+          const candidate = image as Partial<NoteImage>;
+          if (!candidate.src && !candidate.storagePath) return null;
+
+          return {
+            id:
+              typeof candidate.id === "number"
+                ? candidate.id
+                : Date.now() + index,
+            name: candidate.name || `Attachment ${index + 1}`,
+            src: candidate.src,
+            storagePath: candidate.storagePath,
+            contentType: candidate.contentType,
+          } satisfies NoteImage;
+        })
+        .filter(Boolean) as NoteImage[];
+    };
+
+    const parsedLogs: Log[] = savedLogs
+      ? (JSON.parse(savedLogs) as Log[]).map((log) => ({
+          ...log,
+          noteImages: normalizeNoteImages(log.noteImages),
+        }))
+      : [];
 
     setClasses(parsedClasses);
     setLogs(parsedLogs);
@@ -337,6 +379,22 @@ export default function Logs() {
     if (attachment.contentType?.includes("word")) return "DOC";
     if (attachment.contentType?.startsWith("text/")) return "TXT";
     return "FILE";
+  };
+
+  const openAttachmentPicker = (picker: "camera" | "library" | "file") => {
+    const input =
+      picker === "camera"
+        ? cameraInputRef.current
+        : picker === "library"
+          ? photoLibraryInputRef.current
+          : fileInputRef.current;
+
+    if (!input) {
+      showMessage("This attachment picker is not ready yet. Try again.");
+      return;
+    }
+
+    input.click();
   };
 
   const ensureImageUrls = async (images: NoteImage[]) => {
@@ -1065,6 +1123,8 @@ export default function Logs() {
         noteImages: noteImages.map((image) => ({ ...image })),
       });
       showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
+    } catch {
+      showMessage("We couldn't save this lesson. Try again.");
     } finally {
       setIsSaving(false);
     }
@@ -1626,26 +1686,6 @@ export default function Logs() {
     background: "var(--premium-panel-strong)",
     borderRadius: 18,
     padding: 16,
-    position: "relative",
-  };
-
-  const attachmentPickerButtonStyle: React.CSSProperties = {
-    ...whiteBtn,
-    position: "relative",
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    cursor: "pointer",
-    overflow: "hidden",
-  };
-
-  const attachmentNativeInputStyle: React.CSSProperties = {
-    position: "absolute",
-    inset: 0,
-    width: "100%",
-    height: "100%",
-    opacity: 0,
-    cursor: "pointer",
   };
 
   const noteImageGridStyle: React.CSSProperties = {
@@ -2101,40 +2141,76 @@ export default function Logs() {
                 <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
                   Add a notebook photo, choose one from your library, or attach a file so it stays with this lesson.
                 </div>
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  capture="environment"
+                  onChange={handleNoteImageUpload}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  tabIndex={-1}
+                />
+                <input
+                  ref={photoLibraryInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleNoteImageUpload}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  tabIndex={-1}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  multiple
+                  onChange={handleNoteImageUpload}
+                  style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+                  tabIndex={-1}
+                />
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                  <label style={attachmentPickerButtonStyle}>
+                  <button
+                    type="button"
+                    style={{
+                      ...whiteBtn,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => openAttachmentPicker("camera")}
+                  >
                     Take Photo
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      capture="environment"
-                      onChange={handleNoteImageUpload}
-                      style={attachmentNativeInputStyle}
-                    />
-                  </label>
+                  </button>
 
-                  <label style={attachmentPickerButtonStyle}>
+                  <button
+                    type="button"
+                    style={{
+                      ...whiteBtn,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => openAttachmentPicker("library")}
+                  >
                     Photo Library
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleNoteImageUpload}
-                      style={attachmentNativeInputStyle}
-                    />
-                  </label>
+                  </button>
 
-                  <label style={attachmentPickerButtonStyle}>
+                  <button
+                    type="button"
+                    style={{
+                      ...whiteBtn,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => openAttachmentPicker("file")}
+                  >
                     Add File
-                    <input
-                      type="file"
-                      accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                      multiple
-                      onChange={handleNoteImageUpload}
-                      style={attachmentNativeInputStyle}
-                    />
-                  </label>
+                  </button>
                 </div>
 
                 {noteImages.length > 0 && (
