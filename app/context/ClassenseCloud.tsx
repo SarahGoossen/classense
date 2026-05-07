@@ -43,6 +43,7 @@ type CloudContextValue = {
   signUp: (email: string, password: string) => Promise<{ error?: string; message?: string }>;
   resetPassword: (email: string) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
+  persistSnapshotNow: () => Promise<{ ok: boolean; error?: string }>;
 };
 
 const STORAGE_KEYS = [
@@ -150,6 +151,21 @@ const hasMeaningfulData = (snapshot: Snapshot) =>
   snapshot.reminders.length > 0 ||
   Boolean(snapshot.app_name);
 
+const toItemTimestamp = (item: Record<string, unknown>) => {
+  const value =
+    item.updatedAt ||
+    item.updated_at ||
+    item.modifiedAt ||
+    item.modified_at ||
+    item.createdAt ||
+    item.created_at;
+
+  if (typeof value !== "string") return null;
+
+  const parsed = new Date(value).getTime();
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 const mergeById = <T extends Record<string, unknown>>(localItems: T[], remoteItems: T[]) => {
   const merged = new Map<string, T>();
 
@@ -160,7 +176,24 @@ const mergeById = <T extends Record<string, unknown>>(localItems: T[], remoteIte
 
   localItems.forEach((item) => {
     const key = String(item.id ?? JSON.stringify(item));
-    if (!merged.has(key)) {
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, item);
+      return;
+    }
+
+    const localTimestamp = toItemTimestamp(item);
+    const remoteTimestamp = toItemTimestamp(existing);
+
+    if (localTimestamp !== null && remoteTimestamp !== null) {
+      if (localTimestamp >= remoteTimestamp) {
+        merged.set(key, item);
+      }
+      return;
+    }
+
+    if (localTimestamp !== null && remoteTimestamp === null) {
       merged.set(key, item);
     }
   });
@@ -230,14 +263,38 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     async (userId: string, snapshot: Snapshot) => {
       if (!supabase) return;
 
-      await supabase.from("user_snapshots").upsert({
+      const { error } = await supabase.from("user_snapshots").upsert({
         user_id: userId,
         payload: snapshot,
         updated_at: new Date().toISOString(),
       });
+
+      return error ? { error: error.message } : {};
     },
     [supabase]
   );
+
+  const persistSnapshotNow = useCallback(async () => {
+    if (!user || !cloudEnabled) {
+      return { ok: true };
+    }
+
+    if (uploadTimerRef.current) {
+      window.clearTimeout(uploadTimerRef.current);
+      uploadTimerRef.current = null;
+    }
+
+    setSyncStatus("Saving to Classense Cloud...");
+    const result = await pushRemoteSnapshot(user.id, readLocalSnapshot());
+
+    if (result?.error) {
+      setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+      return { ok: false, error: result.error };
+    }
+
+    setSyncStatus("Classense Cloud is active.");
+    return { ok: true };
+  }, [cloudEnabled, pushRemoteSnapshot, user]);
 
   const scheduleUpload = useCallback(() => {
     if (!user || !cloudEnabled || applyingRemoteRef.current) return;
@@ -248,7 +305,11 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     uploadTimerRef.current = window.setTimeout(async () => {
       setSyncStatus("Saving to Classense Cloud...");
-      await pushRemoteSnapshot(user.id, readLocalSnapshot());
+      const result = await pushRemoteSnapshot(user.id, readLocalSnapshot());
+      if (result?.error) {
+        setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+        return;
+      }
       setSyncStatus("Classense Cloud is active.");
     }, 500);
   }, [cloudEnabled, pushRemoteSnapshot, user]);
@@ -279,7 +340,11 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       }, 0);
 
       if (!remoteSnapshot || hasMeaningfulData(merged)) {
-        await pushRemoteSnapshot(nextUser.id, merged);
+        const result = await pushRemoteSnapshot(nextUser.id, merged);
+        if (result?.error) {
+          setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+          return;
+        }
       }
 
       setSyncStatus("Classense Cloud is active.");
@@ -427,6 +492,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         signUp,
         resetPassword,
         signOut,
+        persistSnapshotNow,
       }}
     >
       {children}

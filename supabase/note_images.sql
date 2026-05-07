@@ -4,7 +4,17 @@ values (
   'lesson-note-images',
   false,
   10485760,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+  array[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/heic',
+    'image/heif',
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ]
 )
 on conflict (id) do update
 set

@@ -46,6 +46,7 @@ type NoteImage = {
   name: string;
   src?: string;
   storagePath?: string;
+  contentType?: string;
 };
 
 type Log = {
@@ -58,6 +59,7 @@ type Log = {
   tags: string[];
   references: string;
   noteImages?: NoteImage[];
+  updatedAt?: string;
 };
 const formatTime = (t?: string) => {
   if (!t) return "";
@@ -119,7 +121,7 @@ const getFollowUpReminderDate = (option: string, customValue: string) => {
 
 export default function Logs() {
   const supabase = getSupabaseBrowserClient();
-  const { cloudEnabled, user } = useClassenseCloud();
+  const { cloudEnabled, user, persistSnapshotNow } = useClassenseCloud();
   const [isMobile, setIsMobile] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -314,13 +316,27 @@ export default function Logs() {
             id: image.id,
             name: image.name,
             storagePath: image.storagePath,
+            contentType: image.contentType,
           }
         : {
             id: image.id,
             name: image.name,
             src: image.src,
+            contentType: image.contentType,
           }
     );
+
+  const isImageAttachment = (attachment: NoteImage) =>
+    attachment.contentType?.startsWith("image/") ||
+    attachment.src?.startsWith("data:image") ||
+    Boolean(attachment.src && /\.(png|jpe?g|webp|gif|heic|heif|bmp|svg)(\?|$)/i.test(attachment.src));
+
+  const getAttachmentLabel = (attachment: NoteImage) => {
+    if (attachment.contentType === "application/pdf") return "PDF";
+    if (attachment.contentType?.includes("word")) return "DOC";
+    if (attachment.contentType?.startsWith("text/")) return "TXT";
+    return "FILE";
+  };
 
   const ensureImageUrls = async (images: NoteImage[]) => {
     if (!supabase) return images;
@@ -496,13 +512,15 @@ export default function Logs() {
       return;
     }
 
-    const imageMarkup = noteImages.length
+    const imageAttachments = noteImages.filter((image) => isImageAttachment(image) && image.src);
+    const fileAttachments = noteImages.filter((image) => !isImageAttachment(image));
+
+    const imageMarkup = imageAttachments.length
       ? `
           <div class="section">
-            <strong>Notebook Photos</strong>
+            <strong>Attachments</strong>
             <div class="gallery">
-              ${noteImages
-                .filter((image) => image.src)
+              ${imageAttachments
                 .map(
                   (image) => `
                     <figure class="photo-card">
@@ -513,6 +531,17 @@ export default function Logs() {
                 )
                 .join("")}
             </div>
+          </div>
+        `
+      : "";
+
+    const fileMarkup = fileAttachments.length
+      ? `
+          <div class="section">
+            <strong>Attached Files</strong>
+            <div class="box">${fileAttachments
+              .map((image) => escapeHtml(image.name))
+              .join("<br />")}</div>
           </div>
         `
       : "";
@@ -575,6 +604,7 @@ export default function Logs() {
           </div>
 
           ${imageMarkup}
+          ${fileMarkup}
         </body>
       </html>
     `);
@@ -617,6 +647,7 @@ export default function Logs() {
               name: file.name || "Notebook photo",
               storagePath,
               src: signedUrl,
+              contentType: file.type,
             } satisfies NoteImage;
           }
 
@@ -627,6 +658,7 @@ export default function Logs() {
                 id: Date.now() + Math.floor(Math.random() * 100000),
                 name: file.name || "Notebook photo",
                 src: String(reader.result || ""),
+                contentType: file.type,
               });
             reader.onerror = () => reject(reader.error);
             reader.readAsDataURL(file);
@@ -947,6 +979,7 @@ export default function Logs() {
       tags: mergedTags,
       references,
       noteImages: serializeNoteImages(noteImages),
+      updatedAt: new Date().toISOString(),
     };
 
     const updated =
@@ -1018,11 +1051,16 @@ export default function Logs() {
       );
     }
 
+    const syncResult = await persistSnapshotNow();
+
     resetNoteImageTracking(payload.noteImages || []);
     setIsEditor(false);
     setDraftReminderId(null);
-    setSelectedLog(payload);
-    showMessage("Saved ✓");
+    setSelectedLog({
+      ...payload,
+      noteImages: noteImages.map((image) => ({ ...image })),
+    });
+    showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
   };
 
   const allTags = useMemo(
@@ -2032,30 +2070,69 @@ export default function Logs() {
               />
 
               <div style={noteUploadCardStyle}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Notebook Photos</div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Attachments</div>
                 <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                  Snap a notebook page or add a screenshot so it stays with this lesson as a reference.
+                  Add a notebook photo, choose one from your library, or attach a file so it stays with this lesson.
                 </div>
-                <label
-                  style={{
-                    ...whiteBtn,
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    marginTop: 12,
-                    cursor: "pointer",
-                  }}
-                >
-                  Add Photo
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    capture="environment"
-                    onChange={handleNoteImageUpload}
-                    style={{ display: "none" }}
-                  />
-                </label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
+                  <label
+                    style={{
+                      ...whiteBtn,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Take Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      capture="environment"
+                      onChange={handleNoteImageUpload}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+
+                  <label
+                    style={{
+                      ...whiteBtn,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Photo Library
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleNoteImageUpload}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+
+                  <label
+                    style={{
+                      ...whiteBtn,
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Add File
+                    <input
+                      type="file"
+                      accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      multiple
+                      onChange={handleNoteImageUpload}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
 
                 {noteImages.length > 0 && (
                   <div style={noteImageGridStyle}>
@@ -2071,18 +2148,35 @@ export default function Logs() {
                           gap: 8,
                         }}
                       >
-                        <img
-                          src={image.src}
-                          alt={image.name}
-                          onClick={() => setActiveNoteImage(image)}
-                          style={{
-                            width: "100%",
-                            aspectRatio: "1 / 1",
-                            objectFit: "cover",
-                            borderRadius: 12,
-                            cursor: "zoom-in",
-                          }}
-                        />
+                        {isImageAttachment(image) ? (
+                          <img
+                            src={image.src}
+                            alt={image.name}
+                            onClick={() => setActiveNoteImage(image)}
+                            style={{
+                              width: "100%",
+                              aspectRatio: "1 / 1",
+                              objectFit: "cover",
+                              borderRadius: 12,
+                              cursor: "zoom-in",
+                            }}
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => image.src && window.open(image.src, "_blank", "noopener,noreferrer")}
+                            style={{
+                              ...whiteBtn,
+                              minHeight: 110,
+                              display: "grid",
+                              placeItems: "center",
+                              textAlign: "center",
+                              fontWeight: 700,
+                            }}
+                          >
+                            {getAttachmentLabel(image)}
+                          </button>
+                        )}
                         <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
                           {image.name}
                         </div>
@@ -2189,15 +2283,17 @@ export default function Logs() {
 
           {selectedLog.noteImages && selectedLog.noteImages.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Notebook Photos</div>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Attachments</div>
               <div style={noteImageGridStyle}>
                 {selectedLog.noteImages.map((image) => (
                   <a
                     key={image.id}
                     href={image.src}
                     onClick={(event) => {
-                      event.preventDefault();
-                      setActiveNoteImage(image);
+                      if (isImageAttachment(image)) {
+                        event.preventDefault();
+                        setActiveNoteImage(image);
+                      }
                     }}
                     style={{
                       background: "rgba(255,255,255,0.56)",
@@ -2209,17 +2305,33 @@ export default function Logs() {
                       textDecoration: "none",
                     }}
                   >
-                    <img
-                      src={image.src}
-                      alt={image.name}
-                      style={{
-                        width: "100%",
-                        aspectRatio: "1 / 1",
-                        objectFit: "cover",
-                        borderRadius: 12,
-                        cursor: "zoom-in",
-                      }}
-                    />
+                    {isImageAttachment(image) ? (
+                      <img
+                        src={image.src}
+                        alt={image.name}
+                        style={{
+                          width: "100%",
+                          aspectRatio: "1 / 1",
+                          objectFit: "cover",
+                          borderRadius: 12,
+                          cursor: "zoom-in",
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          minHeight: 110,
+                          borderRadius: 12,
+                          background: "rgba(226,232,240,0.85)",
+                          display: "grid",
+                          placeItems: "center",
+                          color: "#0f172a",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {getAttachmentLabel(image)}
+                      </div>
+                    )}
                     <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
                       {image.name}
                     </div>

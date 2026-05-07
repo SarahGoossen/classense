@@ -26,6 +26,7 @@ type BackupNoteImage = {
   src?: string;
   storagePath?: string;
   backupData?: string;
+  contentType?: string;
 };
 
 type BackupLog = {
@@ -208,18 +209,23 @@ export default function Settings() {
                     id: image.id,
                     name: image.name,
                     storagePath: image.storagePath,
+                    contentType: image.contentType,
                   }
                 : {
                     id: image.id,
                     name: image.name,
                     src: image.src,
+                    contentType: image.contentType,
                   };
             }
 
             if (supabase && cloudEnabled && user) {
+              let fallbackContentType = image.contentType;
+
               try {
                 const response = await fetch(image.backupData);
                 const blob = await response.blob();
+                fallbackContentType = blob.type || fallbackContentType;
                 const extension = blob.type.split("/")[1] || "png";
                 const uploadFile = new File([blob], image.name || `lesson-note.${extension}`, {
                   type: blob.type || "image/png",
@@ -229,12 +235,14 @@ export default function Settings() {
                   id: image.id,
                   name: image.name,
                   storagePath,
+                  contentType: fallbackContentType,
                 };
               } catch {
                 return {
                   id: image.id,
                   name: image.name,
                   src: image.backupData,
+                  contentType: fallbackContentType,
                 };
               }
             }
@@ -243,6 +251,7 @@ export default function Settings() {
               id: image.id,
               name: image.name,
               src: image.backupData,
+              contentType: image.contentType,
             };
           })
         );
