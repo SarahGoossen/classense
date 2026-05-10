@@ -133,6 +133,14 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) =
       window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
     }),
   ]);
+
+const readFileAsDataUrl = (file: File) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -271,16 +279,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       const found = parsedLogs.find((log) => log.id === Number(openId));
       if (found) {
         setSelectedLog(found);
-        void ensureImageUrls(found.noteImages || []).then((resolvedImages) => {
-          setSelectedLog((current) =>
-            current?.id === found.id
-              ? {
-                  ...found,
-                  noteImages: resolvedImages,
-                }
-              : current
-          );
-        });
         resetNoteImageTracking(found.noteImages || []);
         localStorage.removeItem("openLogId");
       }
@@ -298,7 +296,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
         setTagInput("");
         setReferences(found.references || "");
         setNoteImages(found.noteImages || []);
-        void ensureImageUrls(found.noteImages || []).then(setNoteImages);
         resetNoteImageTracking(found.noteImages || []);
         setEditingId(found.id);
         setSelectedLog(null);
@@ -454,6 +451,37 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     return resolved;
   };
 
+  const resolveAttachmentUrl = async (attachment: NoteImage) => {
+    if (attachment.storagePath && supabase) {
+      try {
+        return await withTimeout(
+          createNoteImageUrl(supabase, attachment.storagePath),
+          6000,
+          "Attachment preview"
+        );
+      } catch {
+        if (attachment.src) return attachment.src;
+        throw new Error("Could not create an attachment URL.");
+      }
+    }
+
+    return attachment.src || "";
+  };
+
+  const handleOpenAttachment = async (attachment: NoteImage) => {
+    try {
+      const url = await resolveAttachmentUrl(attachment);
+      if (!url) {
+        showMessage("We couldn't open that attachment");
+        return;
+      }
+
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch {
+      showMessage("We couldn't open that attachment");
+    }
+  };
+
   const getClassTime = (className: string) => {
     const found = classes.find((c) => c.name === className);
     return found?.time || "18:00";
@@ -488,16 +516,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
 
   const handleOpen = (log: Log) => {
     setSelectedLog(log);
-    void ensureImageUrls(log.noteImages || []).then((resolvedImages) => {
-      setSelectedLog((current) =>
-        current?.id === log.id
-          ? {
-              ...log,
-              noteImages: resolvedImages,
-            }
-          : current
-      );
-    });
     resetNoteImageTracking(log.noteImages || []);
     setIsEditor(false);
   };
@@ -512,7 +530,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     setTagInput("");
     setReferences(log.references || "");
     setNoteImages(log.noteImages || []);
-    void ensureImageUrls(log.noteImages || []).then(setNoteImages);
     resetNoteImageTracking(log.noteImages || []);
     setEditingId(log.id);
     setSelectedLog(null);
@@ -743,45 +760,37 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       const results = await Promise.allSettled(
         files.map(async (file) => {
           if (supabase && cloudEnabled && user) {
-            const storagePath = await withTimeout(
-              uploadNoteImage(supabase, user.id, file),
-              12000,
-              "Attachment upload"
-            );
-            sessionUploadedPathsRef.current.add(storagePath);
-
-            let src: string | undefined;
             try {
-              src = await withTimeout(
-                createNoteImageUrl(supabase, storagePath),
-                6000,
-                "Attachment preview"
+              const storagePath = await withTimeout(
+                uploadNoteImage(supabase, user.id, file),
+                12000,
+                "Attachment upload"
               );
-            } catch {
-              src = URL.createObjectURL(file);
-            }
+              sessionUploadedPathsRef.current.add(storagePath);
 
-            return {
-              id: Date.now() + Math.floor(Math.random() * 100000),
-              name: file.name || "Attachment",
-              storagePath,
-              src,
-              contentType: file.type,
-            } satisfies NoteImage;
-          }
-
-          return await new Promise<NoteImage>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () =>
-              resolve({
+              return {
                 id: Date.now() + Math.floor(Math.random() * 100000),
                 name: file.name || "Attachment",
-                src: String(reader.result || ""),
+                storagePath,
                 contentType: file.type,
-              });
-            reader.onerror = () => reject(reader.error);
-            reader.readAsDataURL(file);
-          });
+              } satisfies NoteImage;
+            } catch {
+              const src = await readFileAsDataUrl(file);
+              return {
+                id: Date.now() + Math.floor(Math.random() * 100000),
+                name: file.name || "Attachment",
+                src,
+                contentType: file.type,
+              } satisfies NoteImage;
+            }
+          }
+
+          return {
+            id: Date.now() + Math.floor(Math.random() * 100000),
+            name: file.name || "Attachment",
+            src: await readFileAsDataUrl(file),
+            contentType: file.type,
+          } satisfies NoteImage;
         })
       );
 
@@ -797,10 +806,18 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
         setNoteImages((prev) => [...prev, ...uploaded]);
       }
 
-      if (uploaded.length > 0 && failedCount === 0) {
+      const localOnlyCount = uploaded.filter((image) => !image.storagePath && image.src).length;
+
+      if (uploaded.length > 0 && failedCount === 0 && localOnlyCount === 0) {
         showMessage(uploaded.length === 1 ? "Attachment uploaded" : "Attachments uploaded");
+      } else if (uploaded.length > 0 && localOnlyCount > 0 && failedCount === 0) {
+        showMessage(
+          localOnlyCount === uploaded.length
+            ? "Attachment added on this device"
+            : "Some attachments were added on this device"
+        );
       } else if (uploaded.length > 0) {
-        showMessage("Some attachments uploaded, but at least one failed");
+        showMessage("Some attachments were added, but at least one failed");
       } else {
         showMessage("We couldn't add that attachment");
       }
@@ -1782,9 +1799,28 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
 
   const noteImageGridStyle: React.CSSProperties = {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))",
-    gap: 12,
+    gap: 10,
     marginTop: 12,
+  };
+
+  const attachmentRowStyle: React.CSSProperties = {
+    background: "rgba(255,255,255,0.56)",
+    border: "1px solid rgba(148,163,184,0.16)",
+    borderRadius: 16,
+    padding: 12,
+    display: "grid",
+    gap: 10,
+  };
+
+  const attachmentBadgeStyle: React.CSSProperties = {
+    minWidth: 56,
+    padding: "8px 10px",
+    borderRadius: 12,
+    background: "rgba(226,232,240,0.88)",
+    color: "#0f172a",
+    fontWeight: 700,
+    fontSize: 12,
+    textAlign: "center",
   };
 
   const followUpReminderPreview = (() => {
@@ -1807,7 +1843,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     return (
       <div style={shellStyle}>
         <Toast />
-        <NoteImageModal />
         <div style={{ maxWidth: "100%", margin: "0 auto", padding: isMobile ? "8px 0 16px" : "16px" }}>
             <div
               style={{
@@ -2310,75 +2345,50 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
                     {noteImages.map((image) => (
                       <div
                         key={image.id}
-                        style={{
-                          background: "rgba(255,255,255,0.56)",
-                          border: "1px solid rgba(148,163,184,0.16)",
-                          borderRadius: 16,
-                          padding: 8,
-                          display: "grid",
-                          gap: 8,
-                        }}
+                        style={attachmentRowStyle}
                       >
-                    {isImageAttachment(image) ? (
-                      image.src ? (
-                        <img
-                          src={image.src}
-                          alt={image.name}
-                          onClick={() => setActiveNoteImage(image)}
-                          style={{
-                            width: "100%",
-                            aspectRatio: "1 / 1",
-                            objectFit: "cover",
-                            borderRadius: 12,
-                            cursor: "zoom-in",
-                          }}
-                        />
-                      ) : (
-                        <div
-                          style={{
-                            minHeight: 110,
-                            borderRadius: 12,
-                            background: "rgba(226,232,240,0.85)",
-                            display: "grid",
-                            placeItems: "center",
-                            color: "#0f172a",
-                            fontWeight: 700,
-                            textAlign: "center",
-                            padding: 12,
-                          }}
-                        >
-                          Preview loading
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                          <div style={attachmentBadgeStyle}>
+                            {getAttachmentLabel(image)}
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "var(--text)",
+                                lineHeight: 1.35,
+                                wordBreak: "break-word",
+                              }}
+                            >
+                              {image.name}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35, marginTop: 4 }}>
+                              {isImageAttachment(image) ? "Image attachment" : "File attachment"}
+                            </div>
+                            {!image.storagePath && (
+                              <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35, marginTop: 4 }}>
+                                Saved on this device.
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      )
-                    ) : (
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                           <button
                             type="button"
-                            onClick={() => image.src && window.open(image.src, "_blank", "noopener,noreferrer")}
-                            style={{
-                              ...whiteBtn,
-                              minHeight: 110,
-                              display: "grid",
-                              placeItems: "center",
-                              textAlign: "center",
-                              fontWeight: 700,
-                            }}
+                            onClick={() => void handleOpenAttachment(image)}
+                            style={whiteBtn}
                           >
-                            {getAttachmentLabel(image)}
+                            Open
                           </button>
-                        )}
-                        <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
-                          {image.name}
+                          <button
+                            type="button"
+                            onClick={() => void handleRemoveNoteImage(image)}
+                            style={whiteBtn}
+                          >
+                            Remove
+                          </button>
                         </div>
-                        <div style={{ fontSize: 11, color: "var(--muted)", lineHeight: 1.3 }}>
-                          Need to replace it? Remove this one, then add the new file.
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => void handleRemoveNoteImage(image)}
-                          style={whiteBtn}
-                        >
-                          Remove
-                        </button>
                       </div>
                     ))}
                   </div>
@@ -2413,7 +2423,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     return (
       <div style={shellStyle}>
         <Toast />
-        <NoteImageModal />
   
         <div style={{ marginBottom: 14 }}>
           <button onClick={() => setSelectedLog(null)} style={whiteBtn}>← Back</button>
@@ -2479,74 +2488,36 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Attachments</div>
               <div style={noteImageGridStyle}>
                 {selectedLog.noteImages.map((image) => (
-                  <a
-                    key={image.id}
-                    href={image.src}
-                    onClick={(event) => {
-                      if (isImageAttachment(image)) {
-                        event.preventDefault();
-                        setActiveNoteImage(image);
-                      }
-                    }}
-                    style={{
-                      background: "rgba(255,255,255,0.56)",
-                      border: "1px solid rgba(148,163,184,0.16)",
-                      borderRadius: 16,
-                      padding: 8,
-                      display: "grid",
-                      gap: 8,
-                      textDecoration: "none",
-                    }}
-                  >
-                    {isImageAttachment(image) ? (
-                      image.src ? (
-                        <img
-                          src={image.src}
-                          alt={image.name}
-                          style={{
-                            width: "100%",
-                            aspectRatio: "1 / 1",
-                            objectFit: "cover",
-                            borderRadius: 12,
-                            cursor: "zoom-in",
-                          }}
-                        />
-                      ) : (
+                  <div key={image.id} style={attachmentRowStyle}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                      <div style={attachmentBadgeStyle}>{getAttachmentLabel(image)}</div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
                         <div
                           style={{
-                            minHeight: 110,
-                            borderRadius: 12,
-                            background: "rgba(226,232,240,0.85)",
-                            display: "grid",
-                            placeItems: "center",
-                            color: "#0f172a",
-                            fontWeight: 700,
-                            textAlign: "center",
-                            padding: 12,
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "var(--text)",
+                            lineHeight: 1.35,
+                            wordBreak: "break-word",
                           }}
                         >
-                          Preview loading
+                          {image.name}
                         </div>
-                      )
-                    ) : (
-                      <div
-                        style={{
-                          minHeight: 110,
-                          borderRadius: 12,
-                          background: "rgba(226,232,240,0.85)",
-                          display: "grid",
-                          placeItems: "center",
-                          color: "#0f172a",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {getAttachmentLabel(image)}
+                        <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35, marginTop: 4 }}>
+                          {isImageAttachment(image) ? "Image attachment" : "File attachment"}
+                        </div>
                       </div>
-                    )}
-                    <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35 }}>
-                      {image.name}
                     </div>
-                  </a>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenAttachment(image)}
+                        style={whiteBtn}
+                      >
+                        Open
+                      </button>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
