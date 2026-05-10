@@ -78,6 +78,8 @@ const SNAPSHOT_KEYS = [
   "reminders",
 ] as const;
 
+const LOCAL_LOG_BACKUP_KEY = "classense_logs_local_backup";
+
 const emptySnapshot = (): Snapshot => ({
   app_name: "",
   lastUsedClass: "",
@@ -166,16 +168,19 @@ const toItemTimestamp = (item: Record<string, unknown>) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
+const toItemKey = (item: Record<string, unknown>) =>
+  String(item.id ?? JSON.stringify(item));
+
 const mergeById = <T extends Record<string, unknown>>(localItems: T[], remoteItems: T[]) => {
   const merged = new Map<string, T>();
 
   remoteItems.forEach((item) => {
-    const key = String(item.id ?? JSON.stringify(item));
+    const key = toItemKey(item);
     merged.set(key, item);
   });
 
   localItems.forEach((item) => {
-    const key = String(item.id ?? JSON.stringify(item));
+    const key = toItemKey(item);
     const existing = merged.get(key);
 
     if (!existing) {
@@ -201,23 +206,64 @@ const mergeById = <T extends Record<string, unknown>>(localItems: T[], remoteIte
   return Array.from(merged.values());
 };
 
-const mergeSnapshots = (localSnapshot: Snapshot, remoteSnapshot: Snapshot): Snapshot => ({
-  app_name: localSnapshot.app_name || remoteSnapshot.app_name || "",
-  lastUsedClass: localSnapshot.lastUsedClass || remoteSnapshot.lastUsedClass || "",
-  remindersEnabled: localSnapshot.remindersEnabled || remoteSnapshot.remindersEnabled || "true",
-  classReminder: localSnapshot.classReminder || remoteSnapshot.classReminder || "true",
-  prepReminder: localSnapshot.prepReminder || remoteSnapshot.prepReminder || "true",
-  prepTime: localSnapshot.prepTime || remoteSnapshot.prepTime || "2h",
-  app_theme: localSnapshot.app_theme || remoteSnapshot.app_theme || "light",
-  classes: mergeById(localSnapshot.classes as Record<string, unknown>[], remoteSnapshot.classes as Record<string, unknown>[]),
-  logs: mergeById(localSnapshot.logs as Record<string, unknown>[], remoteSnapshot.logs as Record<string, unknown>[]),
-  plannerEvents: mergeById(
-    localSnapshot.plannerEvents as Record<string, unknown>[],
-    remoteSnapshot.plannerEvents as Record<string, unknown>[]
-  ),
-  library: mergeById(localSnapshot.library as Record<string, unknown>[], remoteSnapshot.library as Record<string, unknown>[]),
-  reminders: mergeById(localSnapshot.reminders as Record<string, unknown>[], remoteSnapshot.reminders as Record<string, unknown>[]),
-});
+const backupLocalOnlyLogs = (
+  localLogs: Record<string, unknown>[],
+  remoteLogs: Record<string, unknown>[]
+) => {
+  if (typeof window === "undefined") return;
+
+  const remoteById = new Map<string, Record<string, unknown>>();
+  remoteLogs.forEach((item) => {
+    remoteById.set(toItemKey(item), item);
+  });
+
+  const extras = localLogs.filter((localLog) => {
+    const key = toItemKey(localLog);
+    const remoteLog = remoteById.get(key);
+    if (!remoteLog) return true;
+
+    const localTimestamp = toItemTimestamp(localLog);
+    const remoteTimestamp = toItemTimestamp(remoteLog);
+    return localTimestamp !== null && remoteTimestamp !== null && localTimestamp > remoteTimestamp;
+  });
+
+  if (extras.length === 0) return;
+
+  const existingBackup = parseJson<Record<string, unknown>[]>(
+    localStorage.getItem(LOCAL_LOG_BACKUP_KEY),
+    []
+  );
+  const mergedBackup = mergeById(existingBackup, extras);
+  localStorage.setItem(LOCAL_LOG_BACKUP_KEY, JSON.stringify(mergedBackup));
+};
+
+const mergeSnapshots = (localSnapshot: Snapshot, remoteSnapshot: Snapshot): Snapshot => {
+  const remoteLogs = remoteSnapshot.logs as Record<string, unknown>[];
+  const localLogs = localSnapshot.logs as Record<string, unknown>[];
+  const shouldUseRemoteLogs = remoteLogs.length > 0;
+
+  if (shouldUseRemoteLogs) {
+    backupLocalOnlyLogs(localLogs, remoteLogs);
+  }
+
+  return {
+    app_name: localSnapshot.app_name || remoteSnapshot.app_name || "",
+    lastUsedClass: localSnapshot.lastUsedClass || remoteSnapshot.lastUsedClass || "",
+    remindersEnabled: localSnapshot.remindersEnabled || remoteSnapshot.remindersEnabled || "true",
+    classReminder: localSnapshot.classReminder || remoteSnapshot.classReminder || "true",
+    prepReminder: localSnapshot.prepReminder || remoteSnapshot.prepReminder || "true",
+    prepTime: localSnapshot.prepTime || remoteSnapshot.prepTime || "2h",
+    app_theme: localSnapshot.app_theme || remoteSnapshot.app_theme || "light",
+    classes: mergeById(localSnapshot.classes as Record<string, unknown>[], remoteSnapshot.classes as Record<string, unknown>[]),
+    logs: shouldUseRemoteLogs ? remoteSnapshot.logs : localSnapshot.logs,
+    plannerEvents: mergeById(
+      localSnapshot.plannerEvents as Record<string, unknown>[],
+      remoteSnapshot.plannerEvents as Record<string, unknown>[]
+    ),
+    library: mergeById(localSnapshot.library as Record<string, unknown>[], remoteSnapshot.library as Record<string, unknown>[]),
+    reminders: mergeById(localSnapshot.reminders as Record<string, unknown>[], remoteSnapshot.reminders as Record<string, unknown>[]),
+  };
+};
 
 const CloudContext = createContext<CloudContextValue | null>(null);
 
