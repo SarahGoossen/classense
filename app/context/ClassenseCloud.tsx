@@ -441,6 +441,28 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!cloudEnabled || !user) return;
 
+    const refreshFromCloud = () => {
+      void hydrateUser(user);
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshFromCloud();
+      }
+    };
+
+    window.addEventListener("focus", refreshFromCloud);
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      window.removeEventListener("focus", refreshFromCloud);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [cloudEnabled, hydrateUser, user]);
+
+  useEffect(() => {
+    if (!cloudEnabled || !user) return;
+
     const originalSetItem = Storage.prototype.setItem;
     const originalRemoveItem = Storage.prototype.removeItem;
 

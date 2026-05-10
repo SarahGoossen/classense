@@ -2,6 +2,12 @@ import type { Metadata } from "next";
 import { Geist_Mono, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 
+const buildVersion =
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_REF ||
+  process.env.npm_package_version ||
+  "dev";
+
 const sourceSans = Source_Sans_3({
   variable: "--font-source-sans",
   subsets: ["latin"],
@@ -34,6 +40,7 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              window.__CLASSENSE_BUILD_VERSION__ = ${JSON.stringify(buildVersion)};
               try {
                 var theme = localStorage.getItem("app_theme");
                 if (!theme) theme = "auto";

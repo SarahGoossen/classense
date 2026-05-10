@@ -38,6 +38,12 @@ const MOBILE_BOTTOM_NAV_HEIGHT = 76;
 const FIRED_REMINDER_STORAGE_KEY = "firedReminderIds";
 const LIVE_VERSION_STORAGE_KEY = "classenseLiveVersion";
 
+declare global {
+  interface Window {
+    __CLASSENSE_BUILD_VERSION__?: string;
+  }
+}
+
 type ReminderRecord = {
   id: number;
   title: string;
@@ -193,8 +199,14 @@ function AppShell() {
         const fetchedVersion = String(data.version || "").trim();
         if (!fetchedVersion || cancelled) return;
 
+        const currentBuildVersion = String(window.__CLASSENSE_BUILD_VERSION__ || "").trim();
         const storedVersion = localStorage.getItem(LIVE_VERSION_STORAGE_KEY);
         setLatestLiveVersion(fetchedVersion);
+
+        if (currentBuildVersion && currentBuildVersion !== fetchedVersion) {
+          setUpdateAvailable(true);
+          return;
+        }
 
         if (storedVersion && storedVersion !== fetchedVersion) {
           setUpdateAvailable(true);
