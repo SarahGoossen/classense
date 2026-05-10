@@ -142,6 +142,13 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+const formatLocalDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -240,7 +247,7 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
   const sessionUploadedPathsRef = useRef<Set<string>>(new Set());
   const pendingDeletionPathsRef = useRef<Set<string>>(new Set());
 
-  const today = () => new Date().toISOString().split("T")[0];
+  const today = () => formatLocalDateInputValue(new Date());
 
   const showMessage = (text: string) => {
     setMessage(text);

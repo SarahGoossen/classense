@@ -55,6 +55,13 @@ const formatEventDate = (value?: string) => {
   });
 };
 
+const formatLocalDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function Planner({ setTab }: { setTab?: (tab: string) => void }) {
   const scheduledEventsRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -226,7 +233,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   };
 
   const handleSelectDay = (day) => {
-    const formatted = day.toISOString().split("T")[0];
+    const formatted = formatLocalDateInputValue(day);
     setDate(formatted);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -254,10 +261,10 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     days.push(new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d));
   }
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = formatLocalDateInputValue(new Date());
 
   const getEventsForDate = (dateObj) => {
-    const d = dateObj.toISOString().split("T")[0];
+    const d = formatLocalDateInputValue(dateObj);
     return events.filter((e) => e.date === d);
   };
 
@@ -461,7 +468,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       {/* CALENDAR */}
       <div style={calendarGrid}>
         {days.map((day, i) => {
-          const isToday = day && day.toISOString().split("T")[0] === today;
+          const isToday = day && formatLocalDateInputValue(day) === today;
           const dayEvents = day ? getEventsForDate(day) : [];
 
           return (
