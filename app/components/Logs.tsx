@@ -142,13 +142,6 @@ const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const readBlobAsDataUrl = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -227,14 +220,12 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
   const [tagInput, setTagInput] = useState("");
   const [references, setReferences] = useState("");
   const [noteImages, setNoteImages] = useState<NoteImage[]>([]);
-  const [activeNoteImage, setActiveNoteImage] = useState<NoteImage | null>(null);
 
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [filterTags, setFilterTags] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
   const [enablePrepReminder, setEnablePrepReminder] = useState(true);
   const [prepReminderTime, setPrepReminderTime] = useState("2h");
   const [isDictating, setIsDictating] = useState(false);
@@ -457,134 +448,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     );
 
     return resolved;
-  };
-
-  const resolveAttachmentUrl = async (attachment: NoteImage) => {
-    if (attachment.storagePath && supabase) {
-      try {
-        return await withTimeout(
-          createNoteImageUrl(supabase, attachment.storagePath),
-          6000,
-          "Attachment preview"
-        );
-      } catch {
-        if (attachment.src) return attachment.src;
-        throw new Error("Could not create an attachment URL.");
-      }
-    }
-
-    return attachment.src || "";
-  };
-
-  const handleOpenAttachment = async (attachment: NoteImage) => {
-    try {
-      const url = await resolveAttachmentUrl(attachment);
-      if (!url) {
-        showMessage("We couldn't open that attachment");
-        return;
-      }
-
-      if (isImageAttachment(attachment)) {
-        const response = await withTimeout(fetch(url), 12000, "Attachment image");
-        if (!response.ok) {
-          throw new Error("Could not load the attachment image.");
-        }
-
-        const blob = await response.blob();
-        const dataUrl = await readBlobAsDataUrl(blob);
-        const previewWindow = window.open("", "_blank", "noopener,noreferrer");
-
-        if (!previewWindow) {
-          showMessage("Please allow pop-ups to view this attachment");
-          return;
-        }
-
-        previewWindow.document.write(`
-          <html>
-            <head>
-              <title>${escapeHtml(attachment.name)}</title>
-              <style>
-                body {
-                  margin: 0;
-                  background: #0f172a;
-                  color: #fff;
-                  font-family: Arial, sans-serif;
-                  display: grid;
-                  grid-template-rows: auto 1fr;
-                  height: 100vh;
-                }
-                .bar {
-                  padding: 14px 16px;
-                  display: flex;
-                  justify-content: space-between;
-                  align-items: center;
-                  gap: 12px;
-                  background: rgba(15, 23, 42, 0.96);
-                  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-                }
-                .name {
-                  font-size: 14px;
-                  font-weight: 600;
-                  overflow: hidden;
-                  text-overflow: ellipsis;
-                  white-space: nowrap;
-                }
-                .content {
-                  overflow: auto;
-                  padding: 16px;
-                  display: flex;
-                  align-items: flex-start;
-                  justify-content: center;
-                }
-                img {
-                  max-width: 100%;
-                  height: auto;
-                  border-radius: 12px;
-                  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.45);
-                }
-                button {
-                  border: 1px solid rgba(255,255,255,0.18);
-                  background: rgba(255,255,255,0.08);
-                  color: #fff;
-                  padding: 8px 12px;
-                  border-radius: 999px;
-                  cursor: pointer;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="bar">
-                <div class="name">${escapeHtml(attachment.name)}</div>
-                <button onclick="window.close()">Close</button>
-              </div>
-              <div class="content">
-                <img src="${dataUrl}" alt="${escapeHtml(attachment.name)}" />
-              </div>
-            </body>
-          </html>
-        `);
-        previewWindow.document.close();
-        return;
-      }
-
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      if (
-        attachment.contentType &&
-        !attachment.contentType.startsWith("image/") &&
-        attachment.contentType !== "application/pdf" &&
-        !attachment.contentType.startsWith("text/")
-      ) {
-        link.download = attachment.name;
-      }
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    } catch {
-      showMessage("We couldn't open that attachment");
-    }
   };
 
   const getClassTime = (className: string) => {
@@ -856,107 +719,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     setTags((prev) => prev.filter((t) => t !== tag));
   };
 
-  const handleNoteImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    if (files.length === 0) return;
-
-    setIsUploadingAttachments(true);
-    try {
-      const results = await Promise.allSettled(
-        files.map(async (file) => {
-          if (supabase && cloudEnabled && user) {
-            try {
-              const storagePath = await withTimeout(
-                uploadNoteImage(supabase, user.id, file),
-                12000,
-                "Attachment upload"
-              );
-              sessionUploadedPathsRef.current.add(storagePath);
-
-              return {
-                id: Date.now() + Math.floor(Math.random() * 100000),
-                name: file.name || "Attachment",
-                storagePath,
-                contentType: file.type,
-              } satisfies NoteImage;
-            } catch {
-              const src = await readFileAsDataUrl(file);
-              return {
-                id: Date.now() + Math.floor(Math.random() * 100000),
-                name: file.name || "Attachment",
-                src,
-                contentType: file.type,
-              } satisfies NoteImage;
-            }
-          }
-
-          return {
-            id: Date.now() + Math.floor(Math.random() * 100000),
-            name: file.name || "Attachment",
-            src: await readFileAsDataUrl(file),
-            contentType: file.type,
-          } satisfies NoteImage;
-        })
-      );
-
-      const uploaded = results
-        .filter(
-          (result): result is PromiseFulfilledResult<NoteImage> =>
-            result.status === "fulfilled"
-        )
-        .map((result) => result.value);
-      const failedCount = results.length - uploaded.length;
-
-      if (uploaded.length > 0) {
-        setNoteImages((prev) => [...prev, ...uploaded]);
-      }
-
-      const localOnlyCount = uploaded.filter((image) => !image.storagePath && image.src).length;
-
-      if (uploaded.length > 0 && failedCount === 0 && localOnlyCount === 0) {
-        showMessage(uploaded.length === 1 ? "Attachment uploaded" : "Attachments uploaded");
-      } else if (uploaded.length > 0 && localOnlyCount > 0 && failedCount === 0) {
-        showMessage(
-          localOnlyCount === uploaded.length
-            ? "Attachment added on this device"
-            : "Some attachments were added on this device"
-        );
-      } else if (uploaded.length > 0) {
-        showMessage("Some attachments were added, but at least one failed");
-      } else {
-        showMessage("We couldn't add that attachment");
-      }
-    } catch {
-      showMessage("We couldn't add that attachment");
-    } finally {
-      setIsUploadingAttachments(false);
-      event.target.value = "";
-    }
-  };
-
-  const handleRemoveNoteImage = async (image: NoteImage) => {
-    if (!window.confirm("Remove this notebook photo?")) return;
-
-    if (image.storagePath && supabase && cloudEnabled && user) {
-      const isNewUpload = sessionUploadedPathsRef.current.has(image.storagePath);
-      const isExistingImage = initialNoteImagePathsRef.current.has(image.storagePath);
-
-      if (isNewUpload && !isExistingImage) {
-        try {
-          await removeNoteImage(supabase, image.storagePath);
-          sessionUploadedPathsRef.current.delete(image.storagePath);
-        } catch {
-          showMessage("We couldn't remove that cloud photo");
-          return;
-        }
-      } else {
-        pendingDeletionPathsRef.current.add(image.storagePath);
-      }
-    }
-
-    setNoteImages((prev) => prev.filter((item) => item.id !== image.id));
-  };
-
   const toggleFilterTag = (tag: string) => {
     setFilterTags((prev) =>
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
@@ -1218,11 +980,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       return;
     }
 
-    if (isUploadingAttachments) {
-      showMessage("Wait for the attachment to finish uploading");
-      return;
-    }
-
     setIsSaving(true);
     setMessage("Saving...");
     try {
@@ -1389,126 +1146,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
           }}
         >
         {message}
-        </div>
-      </div>
-    ) : null;
-
-  const NoteImageModal = () =>
-    activeNoteImage ? (
-      <div
-        style={{
-          ...noteImageModalOverlayStyle,
-          padding: isMobile ? 0 : noteImageModalOverlayStyle.padding,
-          placeItems: isMobile ? "stretch" : "center",
-        }}
-        onClick={() => setActiveNoteImage(null)}
-      >
-        <div
-          style={{
-            ...noteImageModalCardStyle,
-            width: isMobile ? "100vw" : noteImageModalCardStyle.width,
-            maxHeight: isMobile ? "100dvh" : noteImageModalCardStyle.maxHeight,
-            height: isMobile ? "100dvh" : "auto",
-            borderRadius: isMobile ? 0 : noteImageModalCardStyle.borderRadius,
-            padding: isMobile ? 0 : noteImageModalCardStyle.padding,
-          }}
-          onClick={(event) => event.stopPropagation()}
-        >
-          {isMobile ? (
-            <button
-              type="button"
-              onClick={() => setActiveNoteImage(null)}
-              style={noteImageFloatingCloseStyle}
-            >
-              Close
-            </button>
-          ) : (
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 12,
-              }}
-            >
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
-                  Notebook Photo
-                </div>
-                <div
-                  style={{
-                    fontSize: 13,
-                    color: "#475569",
-                    marginTop: 2,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {activeNoteImage.name}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveNoteImage(null)}
-                style={whiteBtn}
-              >
-                Close
-              </button>
-            </div>
-          )}
-
-          <div
-            style={{
-              overflow: "auto",
-              WebkitOverflowScrolling: "touch",
-              flex: 1,
-              borderRadius: isMobile ? 0 : 18,
-              background: isMobile ? "#0f172a" : "rgba(226,232,240,0.45)",
-              padding: isMobile ? "calc(env(safe-area-inset-top) + 64px) 12px 24px" : 8,
-              touchAction: "pan-x pan-y pinch-zoom",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-            }}
-          >
-            {isMobile && (
-              <div
-                style={{
-                  width: "100%",
-                  marginBottom: 12,
-                  color: "rgba(255,255,255,0.8)",
-                  textAlign: "left",
-                }}
-              >
-                <div style={{ fontWeight: 700, fontSize: 15 }}>Notebook Photo</div>
-                <div
-                  style={{
-                    fontSize: 12,
-                    marginTop: 2,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {activeNoteImage.name}
-                </div>
-              </div>
-            )}
-            <img
-              src={activeNoteImage.src}
-              alt={activeNoteImage.name}
-              style={{
-                width: "100%",
-                maxWidth: isMobile ? "100%" : "100%",
-                height: "auto",
-                objectFit: "contain",
-                borderRadius: isMobile ? 16 : 14,
-                display: "block",
-                margin: "0 auto",
-              }}
-            />
-          </div>
         </div>
       </div>
     ) : null;
@@ -2368,142 +2005,19 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
                 }}
               />
 
-              <div style={noteUploadCardStyle}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Attachments</div>
-                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                  Add a notebook photo, choose one from your library, or attach a file so it stays with this lesson.
-                </div>
-                <input
-                  id="lesson-attachment-camera"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  capture="environment"
-                  onChange={handleNoteImageUpload}
-                  style={visuallyHiddenInputStyle}
-                />
-                <input
-                  id="lesson-attachment-library"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleNoteImageUpload}
-                  style={visuallyHiddenInputStyle}
-                />
-                <input
-                  id="lesson-attachment-file"
-                  type="file"
-                  accept="image/*,application/pdf,text/plain,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  multiple
-                  onChange={handleNoteImageUpload}
-                  style={visuallyHiddenInputStyle}
-                />
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 12 }}>
-                  <label
-                    htmlFor="lesson-attachment-camera"
-                    style={{
-                      ...whiteBtn,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Take Photo
-                  </label>
-
-                  <label
-                    htmlFor="lesson-attachment-library"
-                    style={{
-                      ...whiteBtn,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Photo Library
-                  </label>
-
-                  <label
-                    htmlFor="lesson-attachment-file"
-                    style={{
-                      ...whiteBtn,
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer"
-                    }}
-                  >
-                    Add File
-                  </label>
-                </div>
-
-                {isUploadingAttachments && (
-                  <div style={{ marginTop: 10, fontSize: 13, color: "var(--muted)" }}>
-                    Uploading attachment...
+              {noteImages.length > 0 && (
+                <div style={{ ...cardStyle, background: "var(--ghost-bg)" }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Attachments</div>
+                  <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+                    This lesson has saved attachments, but attachments are temporarily unavailable while we stabilize this feature.
                   </div>
-                )}
-
-                {noteImages.length > 0 && (
-                  <div style={noteImageGridStyle}>
-                    {noteImages.map((image) => (
-                      <div
-                        key={image.id}
-                        style={attachmentRowStyle}
-                      >
-                        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                          <div style={attachmentBadgeStyle}>
-                            {getAttachmentLabel(image)}
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <div
-                              style={{
-                                fontSize: 13,
-                                fontWeight: 600,
-                                color: "var(--text)",
-                                lineHeight: 1.35,
-                                wordBreak: "break-word",
-                              }}
-                            >
-                              {image.name}
-                            </div>
-                            <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35, marginTop: 4 }}>
-                              {isImageAttachment(image) ? "Image attachment" : "File attachment"}
-                            </div>
-                            {!image.storagePath && (
-                              <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35, marginTop: 4 }}>
-                                Saved on this device.
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          <button
-                            type="button"
-                            onClick={() => void handleOpenAttachment(image)}
-                            style={whiteBtn}
-                          >
-                            Open
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleRemoveNoteImage(image)}
-                            style={whiteBtn}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
   
               <button
                 onClick={handleSave}
                 style={metallicBlueBtn}
-                disabled={isSaving || isUploadingAttachments}
+                disabled={isSaving}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform =
                     "translateY(-2px) scale(1.01)";
@@ -2516,7 +2030,7 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
                     "inset 0 1px 2px rgba(255,255,255,0.35), 0 10px 22px rgba(37,99,235,0.25)";
                 }}
               >
-                {isSaving ? "Saving..." : isUploadingAttachments ? "Uploading..." : "Save"}
+                {isSaving ? "Saving..." : "Save"}
               </button>
             </div>
           </div>
@@ -2591,39 +2105,10 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
           {selectedLog.noteImages && selectedLog.noteImages.length > 0 && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Attachments</div>
-              <div style={noteImageGridStyle}>
-                {selectedLog.noteImages.map((image) => (
-                  <div key={image.id} style={attachmentRowStyle}>
-                    <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                      <div style={attachmentBadgeStyle}>{getAttachmentLabel(image)}</div>
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <div
-                          style={{
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "var(--text)",
-                            lineHeight: 1.35,
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {image.name}
-                        </div>
-                        <div style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.35, marginTop: 4 }}>
-                          {isImageAttachment(image) ? "Image attachment" : "File attachment"}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => void handleOpenAttachment(image)}
-                        style={whiteBtn}
-                      >
-                        Open
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div style={{ ...cardStyle, boxShadow: "none" }}>
+                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+                  This lesson has saved attachments, but attachments are temporarily unavailable while we stabilize this feature.
+                </div>
               </div>
             </div>
           )}
@@ -2643,7 +2128,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
   return (
     <div style={shellStyle}>
       <Toast />
-      <NoteImageModal />
       <style jsx global>{`
         @keyframes dictationPulse {
           0%,
