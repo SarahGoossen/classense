@@ -141,6 +141,14 @@ const readFileAsDataUrl = (file: File) =>
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(file);
   });
+
+const readBlobAsDataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
 const formatTime = (t?: string) => {
   if (!t) return "";
   const [h, m] = t.split(":").map(Number);
@@ -476,7 +484,104 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
         return;
       }
 
-      window.open(url, "_blank", "noopener,noreferrer");
+      if (isImageAttachment(attachment)) {
+        const response = await withTimeout(fetch(url), 12000, "Attachment image");
+        if (!response.ok) {
+          throw new Error("Could not load the attachment image.");
+        }
+
+        const blob = await response.blob();
+        const dataUrl = await readBlobAsDataUrl(blob);
+        const previewWindow = window.open("", "_blank", "noopener,noreferrer");
+
+        if (!previewWindow) {
+          showMessage("Please allow pop-ups to view this attachment");
+          return;
+        }
+
+        previewWindow.document.write(`
+          <html>
+            <head>
+              <title>${escapeHtml(attachment.name)}</title>
+              <style>
+                body {
+                  margin: 0;
+                  background: #0f172a;
+                  color: #fff;
+                  font-family: Arial, sans-serif;
+                  display: grid;
+                  grid-template-rows: auto 1fr;
+                  height: 100vh;
+                }
+                .bar {
+                  padding: 14px 16px;
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  gap: 12px;
+                  background: rgba(15, 23, 42, 0.96);
+                  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+                }
+                .name {
+                  font-size: 14px;
+                  font-weight: 600;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                }
+                .content {
+                  overflow: auto;
+                  padding: 16px;
+                  display: flex;
+                  align-items: flex-start;
+                  justify-content: center;
+                }
+                img {
+                  max-width: 100%;
+                  height: auto;
+                  border-radius: 12px;
+                  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.45);
+                }
+                button {
+                  border: 1px solid rgba(255,255,255,0.18);
+                  background: rgba(255,255,255,0.08);
+                  color: #fff;
+                  padding: 8px 12px;
+                  border-radius: 999px;
+                  cursor: pointer;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="bar">
+                <div class="name">${escapeHtml(attachment.name)}</div>
+                <button onclick="window.close()">Close</button>
+              </div>
+              <div class="content">
+                <img src="${dataUrl}" alt="${escapeHtml(attachment.name)}" />
+              </div>
+            </body>
+          </html>
+        `);
+        previewWindow.document.close();
+        return;
+      }
+
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      if (
+        attachment.contentType &&
+        !attachment.contentType.startsWith("image/") &&
+        attachment.contentType !== "application/pdf" &&
+        !attachment.contentType.startsWith("text/")
+      ) {
+        link.download = attachment.name;
+      }
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
     } catch {
       showMessage("We couldn't open that attachment");
     }
