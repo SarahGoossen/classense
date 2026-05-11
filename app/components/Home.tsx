@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useClassenseCloud } from "../context/ClassenseCloud";
 import { subscribeClassenseStorageSync } from "../utils/storageSync";
 const getUserName = () => {
   if (typeof window === "undefined") return "";
@@ -64,6 +65,7 @@ const formatReminderDate = (value?: string) => {
 };
 
 export default function Home({ setTab, setSelectedLogId }: any) {
+  const { authReady, syncStatus, user } = useClassenseCloud();
   const userName = getUserName();
   const [logs, setLogs] = useState<Log[]>([]);
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -102,6 +104,11 @@ export default function Home({ setTab, setSelectedLogId }: any) {
       unsubscribeSync();
     };
   }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    loadData();
+  }, [authReady, syncStatus, user]);
 
   useEffect(() => {
     const dismissed = localStorage.getItem("homeWelcomeTipsDismissed") === "true";
