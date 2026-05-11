@@ -247,23 +247,6 @@ function AppShell() {
     window.location.reload();
   };
 
-  if (!authReady) {
-    return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "grid",
-          placeItems: "center",
-          background: "var(--bg)",
-          color: "var(--text)",
-          padding: 24,
-        }}
-      >
-        Loading Classense...
-      </main>
-    );
-  }
-
   if (signingOut) {
     return (
       <main
@@ -307,6 +290,23 @@ function AppShell() {
             {signOutQuote}
           </p>
         </div>
+      </main>
+    );
+  }
+
+  if (!authReady) {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          display: "grid",
+          placeItems: "center",
+          background: "var(--bg)",
+          color: "var(--text)",
+          padding: 24,
+        }}
+      >
+        Loading Classense...
       </main>
     );
   }

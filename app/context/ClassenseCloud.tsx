@@ -411,8 +411,9 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       if (signingOutRef.current && data.user) return;
       setUser(data.user ?? null);
       setSigningOut(false);
-      setAuthReady(true);
       await hydrateUser(data.user ?? null);
+      if (!active) return;
+      setAuthReady(true);
     });
 
     const {
@@ -428,8 +429,8 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
       setUser(session?.user ?? null);
       setSigningOut(false);
-      setAuthReady(true);
       await hydrateUser(session?.user ?? null);
+      setAuthReady(true);
     });
 
     return () => {
@@ -550,7 +551,6 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     if (!supabase) return;
     signingOutRef.current = true;
     setSigningOut(true);
-    setAuthReady(false);
     setUser(null);
     setSyncStatus("Signing you out...");
 
@@ -560,7 +560,12 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      await supabase.auth.signOut({ scope: "local" });
+      await Promise.race([
+        supabase.auth.signOut({ scope: "local" }),
+        new Promise((resolve) => {
+          window.setTimeout(resolve, 1500);
+        }),
+      ]);
     } finally {
       if (typeof window !== "undefined") {
         window.location.replace(window.location.pathname);
