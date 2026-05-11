@@ -4,7 +4,10 @@ export const CLASSENSE_STORAGE_SYNC_EVENT = "classense-storage-sync";
 
 export const emitClassenseStorageSync = () => {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new Event(CLASSENSE_STORAGE_SYNC_EVENT));
+  const emit = () => window.dispatchEvent(new Event(CLASSENSE_STORAGE_SYNC_EVENT));
+  emit();
+  window.setTimeout(emit, 0);
+  window.setTimeout(emit, 250);
 };
 
 export const subscribeClassenseStorageSync = (callback: () => void) => {
