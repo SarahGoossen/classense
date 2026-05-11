@@ -372,29 +372,39 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setSyncStatus("Syncing your Classense data...");
+      try {
+        setSyncStatus("Syncing your Classense data...");
 
-      const localSnapshot = readLocalSnapshot();
-      const remoteSnapshot = await pullRemoteSnapshot(nextUser.id);
-      const merged = remoteSnapshot
-        ? mergeSnapshots(localSnapshot, remoteSnapshot)
-        : localSnapshot;
+        const localSnapshot = readLocalSnapshot();
+        const remoteSnapshot = await Promise.race([
+          pullRemoteSnapshot(nextUser.id),
+          new Promise<Snapshot | null>((resolve) => {
+            window.setTimeout(() => resolve(null), 8000);
+          }),
+        ]);
+        const merged = remoteSnapshot
+          ? mergeSnapshots(localSnapshot, remoteSnapshot)
+          : localSnapshot;
 
-      applyingRemoteRef.current = true;
-      writeLocalSnapshot(merged);
-      window.setTimeout(() => {
-        applyingRemoteRef.current = false;
-      }, 0);
+        applyingRemoteRef.current = true;
+        writeLocalSnapshot(merged);
+        window.setTimeout(() => {
+          applyingRemoteRef.current = false;
+        }, 0);
 
-      if (!remoteSnapshot || hasMeaningfulData(merged)) {
-        const result = await pushRemoteSnapshot(nextUser.id, merged);
-        if (result?.error) {
-          setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
-          return;
+        if (!remoteSnapshot || hasMeaningfulData(merged)) {
+          const result = await pushRemoteSnapshot(nextUser.id, merged);
+          if (result?.error) {
+            setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+            return;
+          }
         }
-      }
 
-      setSyncStatus("Classense Cloud is active.");
+        setSyncStatus("Classense Cloud is active.");
+      } catch {
+        applyingRemoteRef.current = false;
+        setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+      }
     },
     [cloudEnabled, pullRemoteSnapshot, pushRemoteSnapshot, supabase]
   );
@@ -411,9 +421,12 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       if (signingOutRef.current && data.user) return;
       setUser(data.user ?? null);
       setSigningOut(false);
-      await hydrateUser(data.user ?? null);
-      if (!active) return;
-      setAuthReady(true);
+      try {
+        await hydrateUser(data.user ?? null);
+      } finally {
+        if (!active) return;
+        setAuthReady(true);
+      }
     });
 
     const {
@@ -429,8 +442,11 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
       setUser(session?.user ?? null);
       setSigningOut(false);
-      await hydrateUser(session?.user ?? null);
-      setAuthReady(true);
+      try {
+        await hydrateUser(session?.user ?? null);
+      } finally {
+        setAuthReady(true);
+      }
     });
 
     return () => {
