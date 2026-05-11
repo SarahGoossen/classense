@@ -513,23 +513,36 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     setPrepReminderTime(getStoredPrepTime());
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (!window.confirm("Delete this lesson plan?")) return;
     const updated = logs.filter((log) => log.id !== id);
     saveLogs(updated);
     setSelectedLog(null);
-    showMessage("Deleted");
+    const syncResult = await Promise.race([
+      persistSnapshotNow(),
+      new Promise<{ ok: false; error: string }>((resolve) => {
+        window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 12000);
+      }),
+    ]);
+    showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
   };
 
-  const handleDuplicate = (log: Log) => {
+  const handleDuplicate = async (log: Log) => {
     const copy: Log = {
       ...log,
       id: Date.now(),
       title: `${log.title} (copy)`,
       date: today(),
+      updatedAt: new Date().toISOString(),
     };
     saveLogs([copy, ...logs]);
-    showMessage("Duplicated");
+    const syncResult = await Promise.race([
+      persistSnapshotNow(),
+      new Promise<{ ok: false; error: string }>((resolve) => {
+        window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 12000);
+      }),
+    ]);
+    showMessage(syncResult.ok ? "Duplicated ✓" : "Duplicated on this device. Cloud sync failed.");
   };
 
   const resolveLogNoteImages = async (log: Log) => ensureImageUrls(log.noteImages || []);
