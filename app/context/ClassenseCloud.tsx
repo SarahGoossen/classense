@@ -421,12 +421,8 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       if (signingOutRef.current && data.user) return;
       setUser(data.user ?? null);
       setSigningOut(false);
-      try {
-        await hydrateUser(data.user ?? null);
-      } finally {
-        if (!active) return;
-        setAuthReady(true);
-      }
+      setAuthReady(true);
+      await hydrateUser(data.user ?? null);
     });
 
     const {
@@ -442,11 +438,8 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
       setUser(session?.user ?? null);
       setSigningOut(false);
-      try {
-        await hydrateUser(session?.user ?? null);
-      } finally {
-        setAuthReady(true);
-      }
+      setAuthReady(true);
+      await hydrateUser(session?.user ?? null);
     });
 
     return () => {
