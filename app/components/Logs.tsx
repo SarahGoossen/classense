@@ -564,8 +564,7 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
   const resolveLogNoteImages = async (log: Log) => ensureImageUrls(log.noteImages || []);
 
   const handleShare = async (log: Log) => {
-    const noteImages = await resolveLogNoteImages(log);
-    const text = [
+    const baseText = [
       `Lesson: ${log.title}`,
       `Class: ${log.className}`,
       `Time: ${log.classTime || getClassTime(log.className)}`,
@@ -578,48 +577,32 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       "",
       "References / Links:",
       String(log.references || ""),
-      "",
-      `Notebook Photos: ${noteImages.length || 0}`,
-      ...noteImages
-        .filter((image) => image.src)
-        .map((image, index) => `Photo ${index + 1}: ${image.src}`),
     ].join("\n");
 
     try {
-      if (navigator.share && noteImages.length > 0) {
-        const files = await Promise.all(
-          noteImages
-            .filter((image) => image.src)
-            .map(async (image, index) => {
-              const response = await fetch(image.src as string);
-              const blob = await response.blob();
-              const extension = blob.type.split("/")[1] || "png";
-              return new File(
-                [blob],
-                image.name || `lesson-note-${index + 1}.${extension}`,
-                { type: blob.type || "image/png" }
-              );
-            })
-        );
-
-        const shareData: ShareData = {
+      if (navigator.share) {
+        await navigator.share({
           title: log.title,
-          text,
-        };
-
-        if (files.length > 0 && navigator.canShare?.({ files })) {
-          shareData.files = files;
-        }
-
-        await navigator.share(shareData);
+          text: baseText,
+        });
         showMessage("Shared ✓");
         return;
       }
 
+      const noteImages = await resolveLogNoteImages(log);
+      const text = [
+        baseText,
+        "",
+        `Notebook Photos: ${noteImages.length || 0}`,
+        ...noteImages
+          .filter((image) => image.src)
+          .map((image, index) => `Photo ${index + 1}: ${image.src}`),
+      ].join("\n");
+
       await navigator.clipboard.writeText(text);
       showMessage("Copied ✓");
     } catch {
-      showMessage("Copy failed");
+      showMessage("Share canceled");
     }
   };
 
@@ -630,12 +613,28 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       .replaceAll(">", "&gt;");
 
   const handlePDF = async (log: Log) => {
-    const noteImages = await resolveLogNoteImages(log);
     const win = window.open("", "_blank");
     if (!win) {
       showMessage("Popup blocked");
       return;
     }
+
+    win.document.write(`
+      <html>
+        <head>
+          <title>${escapeHtml(log.title)}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #0f172a; }
+          </style>
+        </head>
+        <body>
+          <p>Preparing your lesson PDF...</p>
+        </body>
+      </html>
+    `);
+    win.document.close();
+
+    const noteImages = await resolveLogNoteImages(log);
 
     const imageAttachments = noteImages.filter((image) => isImageAttachment(image) && image.src);
     const fileAttachments = noteImages.filter((image) => !isImageAttachment(image));

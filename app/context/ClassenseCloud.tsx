@@ -153,6 +153,11 @@ const hasMeaningfulData = (snapshot: Snapshot) =>
   snapshot.reminders.length > 0 ||
   Boolean(snapshot.app_name);
 
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
 const toItemTimestamp = (item: Record<string, unknown>) => {
   const value =
     item.updatedAt ||
@@ -321,6 +326,28 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     [supabase]
   );
 
+  const pushRemoteSnapshotWithRetry = useCallback(
+    async (userId: string, snapshot: Snapshot) => {
+      let lastError = "";
+
+      for (const delay of [0, 1200, 3000]) {
+        if (delay > 0) {
+          await wait(delay);
+        }
+
+        const result = await pushRemoteSnapshot(userId, snapshot);
+        if (!result?.error) {
+          return {};
+        }
+
+        lastError = result.error;
+      }
+
+      return lastError ? { error: lastError } : { error: "unknown-error" };
+    },
+    [pushRemoteSnapshot]
+  );
+
   const persistSnapshotNow = useCallback(async () => {
     if (!user || !cloudEnabled) {
       return { ok: true };
@@ -332,7 +359,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     }
 
     setSyncStatus("Saving to Classense Cloud...");
-    const result = await pushRemoteSnapshot(user.id, readLocalSnapshot());
+    const result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
 
     if (result?.error) {
       setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
@@ -341,7 +368,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     setSyncStatus("Classense Cloud is active.");
     return { ok: true };
-  }, [cloudEnabled, pushRemoteSnapshot, user]);
+  }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
 
   const scheduleUpload = useCallback(() => {
     if (!user || !cloudEnabled || applyingRemoteRef.current) return;
@@ -352,14 +379,14 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     uploadTimerRef.current = window.setTimeout(async () => {
       setSyncStatus("Saving to Classense Cloud...");
-      const result = await pushRemoteSnapshot(user.id, readLocalSnapshot());
+      const result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
       if (result?.error) {
         setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
         return;
       }
       setSyncStatus("Classense Cloud is active.");
     }, 500);
-  }, [cloudEnabled, pushRemoteSnapshot, user]);
+  }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
 
   const hydrateUser = useCallback(
     async (nextUser: User | null) => {
@@ -393,7 +420,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         }, 0);
 
         if (!remoteSnapshot || hasMeaningfulData(merged)) {
-          const result = await pushRemoteSnapshot(nextUser.id, merged);
+          const result = await pushRemoteSnapshotWithRetry(nextUser.id, merged);
           if (result?.error) {
             setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
             return;
@@ -406,7 +433,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
       }
     },
-    [cloudEnabled, pullRemoteSnapshot, pushRemoteSnapshot, supabase]
+    [cloudEnabled, pullRemoteSnapshot, pushRemoteSnapshotWithRetry, supabase]
   );
 
   useEffect(() => {
