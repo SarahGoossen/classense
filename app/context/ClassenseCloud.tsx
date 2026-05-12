@@ -111,6 +111,27 @@ const hasPendingLocalSync = () => {
   return localStorage.getItem(LOCAL_DIRTY_KEY) === "true";
 };
 
+const clearStoredAuthSession = () => {
+  if (typeof window === "undefined") return;
+
+  const clearMatchingKeys = (storage: Storage) => {
+    const keysToRemove: string[] = [];
+
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (!key) continue;
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => storage.removeItem(key));
+  };
+
+  clearMatchingKeys(window.localStorage);
+  clearMatchingKeys(window.sessionStorage);
+};
+
 const parseJson = <T,>(value: string | null, fallback: T): T => {
   if (!value) return fallback;
 
@@ -634,6 +655,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     signingOutRef.current = true;
     setSigningOut(true);
     setUser(null);
+    setAuthReady(true);
     setSyncStatus("Signing you out...");
 
     if (uploadTimerRef.current) {
@@ -643,12 +665,17 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     try {
       await Promise.race([
-        supabase.auth.signOut({ scope: "local" }),
+        supabase.auth.signOut(),
         new Promise((resolve) => {
-          window.setTimeout(resolve, 1500);
+          window.setTimeout(resolve, 3000);
         }),
       ]);
     } finally {
+      clearStoredAuthSession();
+      signingOutRef.current = false;
+      setSigningOut(false);
+      setUser(null);
+      setSyncStatus("Sign in to keep your Classense data across devices.");
       if (typeof window !== "undefined") {
         window.location.replace(window.location.pathname);
       }
