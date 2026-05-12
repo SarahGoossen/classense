@@ -680,6 +680,28 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
             .meta { color: #555; margin-bottom: 20px; }
             .box { border: 1px solid #ccc; padding: 12px; white-space: pre-wrap; }
             .section { margin-top: 18px; }
+            .toolbar {
+              display: flex;
+              gap: 10px;
+              flex-wrap: wrap;
+              margin-bottom: 20px;
+            }
+            .toolbar button {
+              border: 0;
+              border-radius: 999px;
+              padding: 10px 16px;
+              font-size: 14px;
+              font-weight: 600;
+              cursor: pointer;
+            }
+            .back-btn {
+              background: #e2e8f0;
+              color: #0f172a;
+            }
+            .print-btn {
+              background: #0f172a;
+              color: #fff;
+            }
             .gallery {
               display: grid;
               grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -709,6 +731,10 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
           </style>
         </head>
         <body>
+          <div class="toolbar">
+            <button class="back-btn" onclick="if (window.history.length > 1) { window.history.back(); } else { window.close(); if (!window.closed) { window.location.href='${escapeHtml(window.location.origin)}'; } }">Back to Classense</button>
+            <button class="print-btn" onclick="window.print()">Print / Save PDF</button>
+          </div>
           <h1>${escapeHtml(log.title)}</h1>
           <div class="meta">${escapeHtml(log.className)} • ${escapeHtml(log.date)} • ${escapeHtml(log.classTime || getClassTime(log.className))}</div>
 
@@ -735,7 +761,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
 
     win.document.close();
     win.focus();
-    win.print();
   };
 
   const addTag = (raw?: string) => {

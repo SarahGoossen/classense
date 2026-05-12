@@ -288,6 +288,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
   const applyingRemoteRef = useRef(false);
   const uploadTimerRef = useRef<number | null>(null);
   const signingOutRef = useRef(false);
+  const localDirtyRef = useRef(false);
 
   const pullRemoteSnapshot = useCallback(
     async (userId: string): Promise<Snapshot | null> => {
@@ -366,6 +367,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       return { ok: false, error: result.error };
     }
 
+    localDirtyRef.current = false;
     setSyncStatus("Classense Cloud is active.");
     return { ok: true };
   }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
@@ -384,6 +386,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
         return;
       }
+      localDirtyRef.current = false;
       setSyncStatus("Classense Cloud is active.");
     }, 500);
   }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
@@ -403,6 +406,18 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         setSyncStatus("Syncing your Classense data...");
 
         const localSnapshot = readLocalSnapshot();
+        if (localDirtyRef.current && hasMeaningfulData(localSnapshot)) {
+          const result = await pushRemoteSnapshotWithRetry(nextUser.id, localSnapshot);
+          if (result?.error) {
+            setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+            return;
+          }
+
+          localDirtyRef.current = false;
+          setSyncStatus("Classense Cloud is active.");
+          return;
+        }
+
         const remoteSnapshot = await Promise.race([
           pullRemoteSnapshot(nextUser.id),
           new Promise<Snapshot | null>((resolve) => {
@@ -427,6 +442,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
           }
         }
 
+        localDirtyRef.current = false;
         setSyncStatus("Classense Cloud is active.");
       } catch {
         applyingRemoteRef.current = false;
@@ -506,6 +522,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.setItem = function patchedSetItem(key, value) {
       originalSetItem.call(this, key, value);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
+        localDirtyRef.current = true;
         emitClassenseStorageSync();
         scheduleUpload();
       }
@@ -514,6 +531,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.removeItem = function patchedRemoveItem(key) {
       originalRemoveItem.call(this, key);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
+        localDirtyRef.current = true;
         emitClassenseStorageSync();
         scheduleUpload();
       }
