@@ -564,7 +564,7 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
   const resolveLogNoteImages = async (log: Log) => ensureImageUrls(log.noteImages || []);
 
   const handleShare = async (log: Log) => {
-    const baseText = [
+    const text = [
       `Lesson: ${log.title}`,
       `Class: ${log.className}`,
       `Time: ${log.classTime || getClassTime(log.className)}`,
@@ -583,21 +583,11 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       if (navigator.share) {
         await navigator.share({
           title: log.title,
-          text: baseText,
+          text,
         });
         showMessage("Shared ✓");
         return;
       }
-
-      const noteImages = await resolveLogNoteImages(log);
-      const text = [
-        baseText,
-        "",
-        `Notebook Photos: ${noteImages.length || 0}`,
-        ...noteImages
-          .filter((image) => image.src)
-          .map((image, index) => `Photo ${index + 1}: ${image.src}`),
-      ].join("\n");
 
       await navigator.clipboard.writeText(text);
       showMessage("Copied ✓");
@@ -634,42 +624,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     `);
     win.document.close();
 
-    const noteImages = await resolveLogNoteImages(log);
-
-    const imageAttachments = noteImages.filter((image) => isImageAttachment(image) && image.src);
-    const fileAttachments = noteImages.filter((image) => !isImageAttachment(image));
-
-    const imageMarkup = imageAttachments.length
-      ? `
-          <div class="section">
-            <strong>Attachments</strong>
-            <div class="gallery">
-              ${imageAttachments
-                .map(
-                  (image) => `
-                    <figure class="photo-card">
-                      <img src="${escapeHtml(image.src || "")}" alt="${escapeHtml(image.name)}" />
-                      <figcaption>${escapeHtml(image.name)}</figcaption>
-                    </figure>
-                  `
-                )
-                .join("")}
-            </div>
-          </div>
-        `
-      : "";
-
-    const fileMarkup = fileAttachments.length
-      ? `
-          <div class="section">
-            <strong>Attached Files</strong>
-            <div class="box">${fileAttachments
-              .map((image) => escapeHtml(image.name))
-              .join("<br />")}</div>
-          </div>
-        `
-      : "";
-
     win.document.write(`
       <html>
         <head>
@@ -702,32 +656,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
               background: #0f172a;
               color: #fff;
             }
-            .gallery {
-              display: grid;
-              grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-              gap: 16px;
-              margin-top: 12px;
-            }
-            .photo-card {
-              margin: 0;
-              border: 1px solid #d7deea;
-              border-radius: 14px;
-              padding: 10px;
-              break-inside: avoid;
-              background: #f8fbff;
-            }
-            .photo-card img {
-              width: 100%;
-              max-height: 420px;
-              object-fit: contain;
-              border-radius: 10px;
-              background: #fff;
-            }
-            .photo-card figcaption {
-              margin-top: 8px;
-              font-size: 12px;
-              color: #475569;
-            }
           </style>
         </head>
         <body>
@@ -752,9 +680,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
             <strong>References / Links</strong>
             <div class="box">${escapeHtml(String(log.references || ""))}</div>
           </div>
-
-          ${imageMarkup}
-          ${fileMarkup}
         </body>
       </html>
     `);
@@ -2066,15 +1991,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
                 }}
               />
 
-              {noteImages.length > 0 && (
-                <div style={{ ...cardStyle, background: "var(--ghost-bg)" }}>
-                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Attachments</div>
-                  <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                    This lesson has saved attachments, but attachments are temporarily unavailable while we stabilize this feature.
-                  </div>
-                </div>
-              )}
-  
               <button
                 onClick={handleSave}
                 style={metallicBlueBtn}
@@ -2162,18 +2078,6 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
                 })}
             </div>
           </div>
-
-          {selectedLog.noteImages && selectedLog.noteImages.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Attachments</div>
-              <div style={{ ...cardStyle, boxShadow: "none" }}>
-                <div style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-                  This lesson has saved attachments, but attachments are temporarily unavailable while we stabilize this feature.
-                </div>
-              </div>
-            </div>
-          )}
-  
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={() => handleEdit(selectedLog)} style={darkBtn}>Edit</button>
             <button onClick={() => handleDelete(selectedLog.id)} style={darkBtn}>Delete</button>

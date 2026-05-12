@@ -79,6 +79,7 @@ const SNAPSHOT_KEYS = [
 ] as const;
 
 const LOCAL_LOG_BACKUP_KEY = "classense_logs_local_backup";
+const LOCAL_DIRTY_KEY = "classense_pending_cloud_sync";
 
 const emptySnapshot = (): Snapshot => ({
   app_name: "",
@@ -94,6 +95,21 @@ const emptySnapshot = (): Snapshot => ({
   library: [],
   reminders: [],
 });
+
+const markLocalDirty = () => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LOCAL_DIRTY_KEY, "true");
+};
+
+const clearLocalDirty = () => {
+  if (typeof window === "undefined") return;
+  localStorage.removeItem(LOCAL_DIRTY_KEY);
+};
+
+const hasPendingLocalSync = () => {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(LOCAL_DIRTY_KEY) === "true";
+};
 
 const parseJson = <T,>(value: string | null, fallback: T): T => {
   if (!value) return fallback;
@@ -288,7 +304,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
   const applyingRemoteRef = useRef(false);
   const uploadTimerRef = useRef<number | null>(null);
   const signingOutRef = useRef(false);
-  const localDirtyRef = useRef(false);
+  const localDirtyRef = useRef(hasPendingLocalSync());
 
   const pullRemoteSnapshot = useCallback(
     async (userId: string): Promise<Snapshot | null> => {
@@ -368,6 +384,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     }
 
     localDirtyRef.current = false;
+    clearLocalDirty();
     setSyncStatus("Classense Cloud is active.");
     return { ok: true };
   }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
@@ -387,6 +404,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         return;
       }
       localDirtyRef.current = false;
+      clearLocalDirty();
       setSyncStatus("Classense Cloud is active.");
     }, 500);
   }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
@@ -406,6 +424,8 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         setSyncStatus("Syncing your Classense data...");
 
         const localSnapshot = readLocalSnapshot();
+        localDirtyRef.current = hasPendingLocalSync() || localDirtyRef.current;
+
         if (localDirtyRef.current && hasMeaningfulData(localSnapshot)) {
           const result = await pushRemoteSnapshotWithRetry(nextUser.id, localSnapshot);
           if (result?.error) {
@@ -414,6 +434,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
           }
 
           localDirtyRef.current = false;
+          clearLocalDirty();
           setSyncStatus("Classense Cloud is active.");
           return;
         }
@@ -443,6 +464,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         }
 
         localDirtyRef.current = false;
+        clearLocalDirty();
         setSyncStatus("Classense Cloud is active.");
       } catch {
         applyingRemoteRef.current = false;
@@ -522,7 +544,10 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.setItem = function patchedSetItem(key, value) {
       originalSetItem.call(this, key, value);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
-        localDirtyRef.current = true;
+        if (!applyingRemoteRef.current) {
+          localDirtyRef.current = true;
+          markLocalDirty();
+        }
         emitClassenseStorageSync();
         scheduleUpload();
       }
@@ -531,7 +556,10 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.removeItem = function patchedRemoveItem(key) {
       originalRemoveItem.call(this, key);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
-        localDirtyRef.current = true;
+        if (!applyingRemoteRef.current) {
+          localDirtyRef.current = true;
+          markLocalDirty();
+        }
         emitClassenseStorageSync();
         scheduleUpload();
       }
