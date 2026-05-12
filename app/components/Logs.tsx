@@ -370,6 +370,19 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
   }, [logs, selectedLogId]);
 
   useEffect(() => {
+    if (!selectedLog) return;
+    const refreshed = logs.find((log) => log.id === selectedLog.id);
+    if (!refreshed) {
+      setSelectedLog(null);
+      return;
+    }
+
+    if (refreshed !== selectedLog) {
+      setSelectedLog(refreshed);
+    }
+  }, [logs, selectedLog]);
+
+  useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 640);
     updateViewport();
     window.addEventListener("resize", updateViewport);
