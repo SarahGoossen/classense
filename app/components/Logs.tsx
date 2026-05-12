@@ -62,6 +62,12 @@ type Log = {
   updatedAt?: string;
 };
 
+type SyncResult = {
+  ok: boolean;
+  error?: string;
+  pending?: boolean;
+};
+
 const normalizeNoteImages = (images: unknown) => {
   if (!Array.isArray(images)) return [];
 
@@ -131,6 +137,14 @@ const withTimeout = async <T,>(promise: Promise<T>, ms: number, label: string) =
     promise,
     new Promise<T>((_, reject) => {
       window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    }),
+  ]);
+
+const waitForCloudSave = (action: Promise<{ ok: boolean; error?: string }>) =>
+  Promise.race<SyncResult>([
+    action,
+    new Promise<SyncResult>((resolve) => {
+      window.setTimeout(() => resolve({ ok: true, pending: true }), 12000);
     }),
   ]);
 
@@ -518,13 +532,14 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     const updated = logs.filter((log) => log.id !== id);
     saveLogs(updated);
     setSelectedLog(null);
-    const syncResult = await Promise.race([
-      persistSnapshotNow(),
-      new Promise<{ ok: false; error: string }>((resolve) => {
-        window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 12000);
-      }),
-    ]);
-    showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+    const syncResult = await waitForCloudSave(persistSnapshotNow());
+    showMessage(
+      syncResult.pending
+        ? "Deleted on this device. Still syncing to Classense Cloud..."
+        : syncResult.ok
+          ? "Deleted ✓"
+          : "Deleted on this device. Cloud sync failed."
+    );
   };
 
   const handleDuplicate = async (log: Log) => {
@@ -536,13 +551,14 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
       updatedAt: new Date().toISOString(),
     };
     saveLogs([copy, ...logs]);
-    const syncResult = await Promise.race([
-      persistSnapshotNow(),
-      new Promise<{ ok: false; error: string }>((resolve) => {
-        window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 12000);
-      }),
-    ]);
-    showMessage(syncResult.ok ? "Duplicated ✓" : "Duplicated on this device. Cloud sync failed.");
+    const syncResult = await waitForCloudSave(persistSnapshotNow());
+    showMessage(
+      syncResult.pending
+        ? "Duplicated on this device. Still syncing to Classense Cloud..."
+        : syncResult.ok
+          ? "Duplicated ✓"
+          : "Duplicated on this device. Cloud sync failed."
+    );
   };
 
   const resolveLogNoteImages = async (log: Log) => ensureImageUrls(log.noteImages || []);
@@ -1087,12 +1103,7 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
         );
       }
 
-      const syncResult = await Promise.race([
-        persistSnapshotNow(),
-        new Promise<{ ok: false; error: string }>((resolve) => {
-          window.setTimeout(() => resolve({ ok: false, error: "timeout" }), 12000);
-        }),
-      ]);
+      const syncResult = await waitForCloudSave(persistSnapshotNow());
 
       resetNoteImageTracking(payload.noteImages || []);
       setIsEditor(false);
@@ -1101,7 +1112,13 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
         ...payload,
         noteImages: noteImages.map((image) => ({ ...image })),
       });
-      showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
+      showMessage(
+        syncResult.pending
+          ? "Saved on this device. Still syncing to Classense Cloud..."
+          : syncResult.ok
+            ? "Saved ✓"
+            : "Saved on this device. Cloud sync failed."
+      );
     } catch {
       showMessage("We couldn't save this lesson. Try again.");
     } finally {
