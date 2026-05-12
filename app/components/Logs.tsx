@@ -223,7 +223,7 @@ const getFollowUpReminderDate = (option: string, customValue: string) => {
 
 export default function Logs({ selectedLogId }: { selectedLogId?: number | null }) {
   const supabase = getSupabaseBrowserClient();
-  const { cloudEnabled, user, persistSnapshotNow } = useClassenseCloud();
+  const { cloudEnabled, user, authReady, syncStatus, persistSnapshotNow } = useClassenseCloud();
   const [isMobile, setIsMobile] = useState(false);
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [logs, setLogs] = useState<Log[]>([]);
@@ -361,6 +361,11 @@ export default function Logs({ selectedLogId }: { selectedLogId?: number | null 
     const unsubscribeSync = subscribeClassenseStorageSync(loadCoreData);
     return () => unsubscribeSync();
   }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    loadEditorData();
+  }, [authReady, syncStatus, user]);
 
   useEffect(() => {
     if (!selectedLogId) return;
