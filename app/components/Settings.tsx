@@ -71,7 +71,8 @@ export default function Settings() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
-  const { cloudEnabled, user, syncStatus, lastCloudSyncAt, signOut, signingOut } = useClassenseCloud();
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(null);
+  const { cloudEnabled, user, syncStatus, signOut, signingOut } = useClassenseCloud();
 
   const formatLastCloudSync = (value: string | null) => {
     if (!value) return "No recent cloud sync yet";
@@ -156,6 +157,7 @@ export default function Settings() {
     if (savedPrepTime) setPrepTime(savedPrepTime);
     setTheme(savedTheme);
     applyTheme(savedTheme);
+    setLastCloudSyncAt(localStorage.getItem("classense_last_cloud_sync_at"));
 
     const pushState = detectPushSupport();
     setPushSupported(pushState.supported);
