@@ -39,6 +39,7 @@ type CloudContextValue = {
   authMode: AuthMode;
   setAuthMode: (mode: AuthMode) => void;
   syncStatus: string;
+  lastCloudSyncAt: string | null;
   signIn: (email: string, password: string) => Promise<{ error?: string; message?: string }>;
   signUp: (email: string, password: string) => Promise<{ error?: string; message?: string }>;
   resetPassword: (email: string) => Promise<{ error?: string; message?: string }>;
@@ -80,6 +81,7 @@ const SNAPSHOT_KEYS = [
 
 const LOCAL_LOG_BACKUP_KEY = "classense_logs_local_backup";
 const LOCAL_DIRTY_KEY = "classense_pending_cloud_sync";
+const LAST_CLOUD_SYNC_KEY = "classense_last_cloud_sync_at";
 
 const emptySnapshot = (): Snapshot => ({
   app_name: "",
@@ -109,6 +111,16 @@ const clearLocalDirty = () => {
 const hasPendingLocalSync = () => {
   if (typeof window === "undefined") return false;
   return localStorage.getItem(LOCAL_DIRTY_KEY) === "true";
+};
+
+const readLastCloudSyncAt = () => {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(LAST_CLOUD_SYNC_KEY);
+};
+
+const writeLastCloudSyncAt = (value: string) => {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(LAST_CLOUD_SYNC_KEY, value);
 };
 
 const clearStoredAuthSession = () => {
@@ -315,6 +327,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured());
   const [signingOut, setSigningOut] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
+  const [lastCloudSyncAt, setLastCloudSyncAt] = useState<string | null>(readLastCloudSyncAt());
   const [syncStatus, setSyncStatus] = useState(
     isSupabaseConfigured()
       ? "Sign in to keep your Classense data across devices."
@@ -406,6 +419,9 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     localDirtyRef.current = false;
     clearLocalDirty();
+    const syncedAt = new Date().toISOString();
+    writeLastCloudSyncAt(syncedAt);
+    setLastCloudSyncAt(syncedAt);
     setSyncStatus("Classense Cloud is active.");
     return { ok: true };
   }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
@@ -426,6 +442,9 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
       }
       localDirtyRef.current = false;
       clearLocalDirty();
+      const syncedAt = new Date().toISOString();
+      writeLastCloudSyncAt(syncedAt);
+      setLastCloudSyncAt(syncedAt);
       setSyncStatus("Classense Cloud is active.");
     }, 500);
   }, [cloudEnabled, pushRemoteSnapshotWithRetry, user]);
@@ -456,6 +475,9 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
           localDirtyRef.current = false;
           clearLocalDirty();
+          const syncedAt = new Date().toISOString();
+          writeLastCloudSyncAt(syncedAt);
+          setLastCloudSyncAt(syncedAt);
           setSyncStatus("Classense Cloud is active.");
           return;
         }
@@ -486,6 +508,9 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
         localDirtyRef.current = false;
         clearLocalDirty();
+        const syncedAt = new Date().toISOString();
+        writeLastCloudSyncAt(syncedAt);
+        setLastCloudSyncAt(syncedAt);
         setSyncStatus("Classense Cloud is active.");
       } catch {
         applyingRemoteRef.current = false;
@@ -692,6 +717,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
         authMode,
         setAuthMode,
         syncStatus,
+        lastCloudSyncAt,
         signIn,
         signUp,
         resetPassword,

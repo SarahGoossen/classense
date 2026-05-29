@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef } from "react";
 import { calculateReminderTime } from "../utils/reminders";
 import { subscribeClassenseStorageSync } from "../utils/storageSync";
+import { useClassenseCloud } from "../context/ClassenseCloud";
 
 type ReminderItem = {
   id: number;
@@ -63,6 +64,7 @@ const formatLocalDateInputValue = (date: Date) => {
 };
 
 export default function Planner({ setTab }: { setTab?: (tab: string) => void }) {
+  const { persistSnapshotNow } = useClassenseCloud();
   const scheduledEventsRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [date, setDate] = useState("");
@@ -79,6 +81,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   const [search, setSearch] = useState("");
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
+  const [message, setMessage] = useState("");
+
+  const showMessage = (text: string) => {
+    setMessage(text);
+    window.setTimeout(() => setMessage(""), 2200);
+  };
 
   const loadPlannerData = () => {
     const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
@@ -153,10 +161,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setReminders((prev) => prev.filter((item) => item.eventId !== eventId));
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!date || (!selectedClass && !eventTitle.trim())) return;
 
     const eventName = selectedClass || eventTitle.trim();
+    let nextEvents = events;
+    let nextReminders = reminders;
 
     if (editingId) {
       const nextEvent = {
@@ -169,18 +179,28 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         reminderOffset: eventReminderTime,
       };
 
-      setEvents((prev) =>
-        prev.map((e) =>
-          e.id === editingId
-            ? nextEvent
-            : e
-        )
-      );
+      nextEvents = events.map((e) => (e.id === editingId ? nextEvent : e));
 
       if (enableEventReminder && date && time) {
-        upsertEventReminder(editingId, eventName, date, time, eventReminderTime);
+        const remindAt = calculateReminderTime(
+          new Date(`${date}T${time}:00`).toISOString(),
+          eventReminderTime
+        ).toISOString();
+        nextReminders = [
+          ...reminders.filter((item) => item.eventId !== editingId),
+          {
+            id: Date.now(),
+            eventId: editingId,
+            title: eventName,
+            className: eventName,
+            lessonDate: date,
+            classTime: time,
+            remindAt,
+            type: "event",
+          },
+        ];
       } else {
-        removeEventReminder(editingId);
+        nextReminders = reminders.filter((item) => item.eventId !== editingId);
       }
       setEditingId(null);
     } else {
@@ -194,12 +214,33 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         reminderEnabled: enableEventReminder,
         reminderOffset: eventReminderTime,
       };
-      setEvents((prev) => [newEvent, ...prev]);
+      nextEvents = [newEvent, ...events];
 
       if (enableEventReminder && date && time) {
-        upsertEventReminder(newEventId, eventName, date, time, eventReminderTime);
+        const remindAt = calculateReminderTime(
+          new Date(`${date}T${time}:00`).toISOString(),
+          eventReminderTime
+        ).toISOString();
+        nextReminders = [
+          ...reminders,
+          {
+            id: Date.now(),
+            eventId: newEventId,
+            title: eventName,
+            className: eventName,
+            lessonDate: date,
+            classTime: time,
+            remindAt,
+            type: "event",
+          },
+        ];
       }
     }
+
+    setEvents(nextEvents);
+    setReminders(nextReminders);
+    localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
+    localStorage.setItem("reminders", JSON.stringify(nextReminders));
 
     setSelectedClass("");
     setEventTitle("");
@@ -207,12 +248,21 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setNotes("");
     setEnableEventReminder(false);
     setEventReminderTime("2h");
+
+    const syncResult = await persistSnapshotNow();
+    showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this scheduled event?")) return;
-    setEvents((prev) => prev.filter((e) => e.id !== id));
-    removeEventReminder(id);
+    const nextEvents = events.filter((e) => e.id !== id);
+    const nextReminders = reminders.filter((item) => item.eventId !== id);
+    setEvents(nextEvents);
+    setReminders(nextReminders);
+    localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
+    localStorage.setItem("reminders", JSON.stringify(nextReminders));
+    const syncResult = await persistSnapshotNow();
+    showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
   };
 
   const handleEdit = (event) => {
@@ -273,10 +323,13 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     .slice()
     .sort((a, b) => (a.remindAt > b.remindAt ? 1 : -1));
 
-  const handleDeleteReminder = (id: number) => {
+  const handleDeleteReminder = async (id: number) => {
     if (!window.confirm("Delete this reminder?")) return;
     const updated = reminders.filter((item) => item.id !== id);
     setReminders(updated);
+    localStorage.setItem("reminders", JSON.stringify(updated));
+    const syncResult = await persistSnapshotNow();
+    showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
   };
 
   const handleEditReminder = (reminder: ReminderItem) => {
@@ -294,6 +347,34 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
   return (
     <div style={{ ...container, padding: isMobile ? 16 : 20 }}>
+      {message ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "grid",
+            placeItems: "center",
+            zIndex: 60,
+            pointerEvents: "none",
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: "rgba(15,23,42,0.92)",
+              color: "#fff",
+              borderRadius: 16,
+              padding: "12px 16px",
+              boxShadow: "0 18px 38px rgba(15,23,42,0.24)",
+              fontWeight: 600,
+              textAlign: "center",
+              maxWidth: 320,
+            }}
+          >
+            {message}
+          </div>
+        </div>
+      ) : null}
       <div style={header}>
         <h2 style={title}>Calendar</h2>
         <div style={subtitle}>

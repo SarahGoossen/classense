@@ -71,7 +71,19 @@ export default function Settings() {
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBusy, setPushBusy] = useState(false);
   const [pushSupported, setPushSupported] = useState(false);
-  const { cloudEnabled, user, syncStatus, signOut, signingOut } = useClassenseCloud();
+  const { cloudEnabled, user, syncStatus, lastCloudSyncAt, signOut, signingOut } = useClassenseCloud();
+
+  const formatLastCloudSync = (value: string | null) => {
+    if (!value) return "No recent cloud sync yet";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "No recent cloud sync yet";
+    return date.toLocaleString([], {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  };
 
   const detectPushSupport = () => {
     if (typeof window === "undefined") {
@@ -539,6 +551,9 @@ export default function Settings() {
             {user?.email ? `Signed in as ${user.email}.` : "No account connected."}
           </div>
           <div style={statusTealBubble}>{syncStatus}</div>
+          <div style={{ ...sectionHint, marginTop: 8 }}>
+            Last cloud sync: {formatLastCloudSync(lastCloudSyncAt)}
+          </div>
           {user && (
             <button
               onClick={() => void signOut()}
