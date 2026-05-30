@@ -43,7 +43,7 @@ type CloudContextValue = {
   signUp: (email: string, password: string) => Promise<{ error?: string; message?: string }>;
   resetPassword: (email: string) => Promise<{ error?: string; message?: string }>;
   signOut: () => Promise<void>;
-  persistSnapshotNow: () => Promise<{ ok: boolean; error?: string }>;
+  persistSnapshotNow: (snapshotOverride?: Partial<Snapshot>) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const STORAGE_KEYS = [
@@ -414,7 +414,7 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     [pushRemoteSnapshot]
   );
 
-  const persistSnapshotNow = useCallback(async () => {
+  const persistSnapshotNow = useCallback(async (snapshotOverride?: Partial<Snapshot>) => {
     if (!user || !cloudEnabled) {
       return { ok: true };
     }
@@ -426,9 +426,15 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     setSyncStatus("Saving to Classense Cloud...");
     let result: { error?: string } | undefined;
+    const snapshot = snapshotOverride
+      ? {
+          ...readLocalSnapshot(),
+          ...snapshotOverride,
+        }
+      : readLocalSnapshot();
 
     try {
-      result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
+      result = await pushRemoteSnapshotWithRetry(user.id, snapshot);
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Could not reach Classense Cloud.";

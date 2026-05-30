@@ -292,7 +292,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
     setIsSaving(true);
     try {
-      const syncResult = await waitForCloudSave(persistSnapshotNow());
+      const syncResult = await waitForCloudSave(
+        persistSnapshotNow({
+          plannerEvents: nextEvents,
+          reminders: nextReminders,
+        })
+      );
       showMessage(
         syncResult.pending
           ? "Saved on this device. Still syncing to Classense Cloud..."
@@ -321,7 +326,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     localStorage.setItem("reminders", JSON.stringify(nextReminders));
     setIsSaving(true);
     try {
-      const syncResult = await waitForCloudSave(persistSnapshotNow());
+      const syncResult = await waitForCloudSave(
+        persistSnapshotNow({
+          plannerEvents: nextEvents,
+          reminders: nextReminders,
+        })
+      );
       showMessage(
         syncResult.pending
           ? "Deleted on this device. Still syncing to Classense Cloud..."
@@ -405,7 +415,11 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     localStorage.setItem("reminders", JSON.stringify(updated));
     setIsSaving(true);
     try {
-      const syncResult = await waitForCloudSave(persistSnapshotNow());
+      const syncResult = await waitForCloudSave(
+        persistSnapshotNow({
+          reminders: updated,
+        })
+      );
       showMessage(
         syncResult.pending
           ? "Deleted on this device. Still syncing to Classense Cloud..."
