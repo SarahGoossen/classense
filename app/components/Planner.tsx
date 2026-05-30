@@ -107,12 +107,11 @@ const persistPlannerRemotely = async (
   plannerEvents: unknown[],
   reminders: unknown[],
   getToken: () => Promise<string | null>,
-  fallback: () => Promise<{ ok: boolean; error?: string }>
 ) => {
   const token = await getToken();
 
   if (!token) {
-    return fallback();
+    return { ok: false, error: "You are not signed in to Classense Cloud." };
   }
 
   const response = await fetch("/api/planner/sync", {
@@ -134,10 +133,7 @@ const persistPlannerRemotely = async (
       // Keep fallback error message.
     }
 
-    return fallback().then((result) => ({
-      ok: result.ok,
-      error: result.ok ? errorMessage : result.error || errorMessage,
-    }));
+    return { ok: false, error: errorMessage };
   }
 
   return { ok: true };
@@ -333,12 +329,10 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       }
     }
 
+    const previousEvents = events;
+    const previousReminders = reminders;
     setEvents(nextEvents);
     setReminders(nextReminders);
-    withPlannerLocalWrite(() => {
-      localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
-      localStorage.setItem("reminders", JSON.stringify(nextReminders));
-    });
 
     setSelectedClass("");
     setEventTitle("");
@@ -349,7 +343,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
     setIsSaving(true);
     try {
-      const syncResult = await waitForCloudSave(
+      const syncResult = await (
         persistPlannerRemotely(
           nextEvents,
           nextReminders,
@@ -357,21 +351,20 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             if (!supabase) return null;
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token || null;
-          },
-          () =>
-            persistSnapshotNow({
-              plannerEvents: nextEvents,
-              reminders: nextReminders,
-            })
+          }
         )
       );
-      showMessage(
-        syncResult.pending
-          ? "Saved on this device. Still syncing to Classense Cloud..."
-          : syncResult.ok
-            ? "Saved ✓"
-            : "Saved on this device. Cloud sync failed."
-      );
+      if (syncResult.ok) {
+        withPlannerLocalWrite(() => {
+          localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
+          localStorage.setItem("reminders", JSON.stringify(nextReminders));
+        });
+        showMessage("Saved ✓");
+      } else {
+        setEvents(previousEvents);
+        setReminders(previousReminders);
+        showMessage("We couldn't save that event. Please try again.");
+      }
       if (!syncResult.ok && syncResult.error) {
         console.error("Planner save failed:", syncResult.error);
       }
@@ -385,17 +378,15 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this scheduled event?")) return;
+    const previousEvents = events;
+    const previousReminders = reminders;
     const nextEvents = events.filter((e) => e.id !== id);
     const nextReminders = reminders.filter((item) => item.eventId !== id);
     setEvents(nextEvents);
     setReminders(nextReminders);
-    withPlannerLocalWrite(() => {
-      localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
-      localStorage.setItem("reminders", JSON.stringify(nextReminders));
-    });
     setIsSaving(true);
     try {
-      const syncResult = await waitForCloudSave(
+      const syncResult = await (
         persistPlannerRemotely(
           nextEvents,
           nextReminders,
@@ -403,21 +394,20 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             if (!supabase) return null;
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token || null;
-          },
-          () =>
-            persistSnapshotNow({
-              plannerEvents: nextEvents,
-              reminders: nextReminders,
-            })
+          }
         )
       );
-      showMessage(
-        syncResult.pending
-          ? "Deleted on this device. Still syncing to Classense Cloud..."
-          : syncResult.ok
-            ? "Deleted ✓"
-            : "Deleted on this device. Cloud sync failed."
-      );
+      if (syncResult.ok) {
+        withPlannerLocalWrite(() => {
+          localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
+          localStorage.setItem("reminders", JSON.stringify(nextReminders));
+        });
+        showMessage("Deleted ✓");
+      } else {
+        setEvents(previousEvents);
+        setReminders(previousReminders);
+        showMessage("We couldn't delete that event. Please try again.");
+      }
       if (!syncResult.ok && syncResult.error) {
         console.error("Planner delete failed:", syncResult.error);
       }
@@ -489,14 +479,12 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
   const handleDeleteReminder = async (id: number) => {
     if (!window.confirm("Delete this reminder?")) return;
+    const previousReminders = reminders;
     const updated = reminders.filter((item) => item.id !== id);
     setReminders(updated);
-    withPlannerLocalWrite(() => {
-      localStorage.setItem("reminders", JSON.stringify(updated));
-    });
     setIsSaving(true);
     try {
-      const syncResult = await waitForCloudSave(
+      const syncResult = await (
         persistPlannerRemotely(
           events,
           updated,
@@ -504,20 +492,18 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             if (!supabase) return null;
             const { data } = await supabase.auth.getSession();
             return data.session?.access_token || null;
-          },
-          () =>
-            persistSnapshotNow({
-              reminders: updated,
-            })
+          }
         )
       );
-      showMessage(
-        syncResult.pending
-          ? "Deleted on this device. Still syncing to Classense Cloud..."
-          : syncResult.ok
-            ? "Deleted ✓"
-            : "Deleted on this device. Cloud sync failed."
-      );
+      if (syncResult.ok) {
+        withPlannerLocalWrite(() => {
+          localStorage.setItem("reminders", JSON.stringify(updated));
+        });
+        showMessage("Deleted ✓");
+      } else {
+        setReminders(previousReminders);
+        showMessage("We couldn't delete that reminder. Please try again.");
+      }
       if (!syncResult.ok && syncResult.error) {
         console.error("Reminder delete failed:", syncResult.error);
       }
