@@ -347,34 +347,6 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
   return (
     <div style={{ ...container, padding: isMobile ? 16 : 20 }}>
-      {message ? (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "grid",
-            placeItems: "center",
-            zIndex: 60,
-            pointerEvents: "none",
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              background: "rgba(15,23,42,0.92)",
-              color: "#fff",
-              borderRadius: 16,
-              padding: "12px 16px",
-              boxShadow: "0 18px 38px rgba(15,23,42,0.24)",
-              fontWeight: 600,
-              textAlign: "center",
-              maxWidth: 320,
-            }}
-          >
-            {message}
-          </div>
-        </div>
-      ) : null}
       <div style={header}>
         <h2 style={title}>Calendar</h2>
         <div style={subtitle}>
@@ -502,6 +474,23 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         >
           {editingId ? "Update Event" : "Add to Planner"}
         </button>
+
+        {message ? (
+          <div
+            style={{
+              marginTop: 12,
+              padding: "12px 14px",
+              borderRadius: 14,
+              background: "rgba(15,23,42,0.92)",
+              color: "#fff",
+              fontWeight: 600,
+              textAlign: "center",
+              boxShadow: "0 14px 32px rgba(15,23,42,0.2)",
+            }}
+          >
+            {message}
+          </div>
+        ) : null}
       </div>
 
       {/* MONTH HEADER */}

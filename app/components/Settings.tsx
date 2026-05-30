@@ -136,42 +136,49 @@ export default function Settings() {
   };
 
   const loadSettings = async () => {
-    const savedName = localStorage.getItem("app_name");
-    const savedClass = localStorage.getItem("lastUsedClass");
-    const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
+    try {
+      const savedName = localStorage.getItem("app_name");
+      const savedClass = localStorage.getItem("lastUsedClass");
+      const savedClasses = JSON.parse(localStorage.getItem("classes") || "[]");
 
-    const savedReminders = localStorage.getItem("remindersEnabled");
-    const savedClassReminder = localStorage.getItem("classReminder");
-    const savedPrep = localStorage.getItem("prepReminder");
-    const savedPrepTime = localStorage.getItem("prepTime");
-    const savedTheme = getStoredTheme();
+      const savedReminders = localStorage.getItem("remindersEnabled");
+      const savedClassReminder = localStorage.getItem("classReminder");
+      const savedPrep = localStorage.getItem("prepReminder");
+      const savedPrepTime = localStorage.getItem("prepTime");
+      const savedTheme = getStoredTheme();
 
-    if (savedName) setName(savedName);
-    if (savedClass) setDefaultClass(savedClass);
-    setClasses(savedClasses || []);
+      if (savedName) setName(savedName);
+      if (savedClass) setDefaultClass(savedClass);
+      setClasses(savedClasses || []);
 
-    if (savedReminders) setRemindersEnabled(savedReminders === "true");
-    if (savedClassReminder) setClassReminder(savedClassReminder === "true");
-    if (savedPrep) setPrepReminder(savedPrep === "true");
+      if (savedReminders) setRemindersEnabled(savedReminders === "true");
+      if (savedClassReminder) setClassReminder(savedClassReminder === "true");
+      if (savedPrep) setPrepReminder(savedPrep === "true");
 
-    if (savedPrepTime) setPrepTime(savedPrepTime);
-    setTheme(savedTheme);
-    applyTheme(savedTheme);
-    setLastCloudSyncAt(localStorage.getItem("classense_last_cloud_sync_at"));
+      if (savedPrepTime) setPrepTime(savedPrepTime);
+      setTheme(savedTheme);
+      applyTheme(savedTheme);
+      setLastCloudSyncAt(localStorage.getItem("classense_last_cloud_sync_at"));
 
-    const pushState = detectPushSupport();
-    setPushSupported(pushState.supported);
-    setNotificationStatus(pushState.message);
-    setNotificationHelp(pushState.help);
+      const pushState = detectPushSupport();
+      setPushSupported(pushState.supported);
+      setNotificationStatus(pushState.message);
+      setNotificationHelp(pushState.help);
 
-    if (!pushState.supported) {
+      if (!pushState.supported) {
+        setPushEnabled(false);
+        return;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      setPushEnabled(Boolean(subscription));
+    } catch {
+      setPushSupported(false);
       setPushEnabled(false);
-      return;
+      setNotificationStatus("We couldn't load notification settings on this device.");
+      setNotificationHelp("Refresh and try again. If it keeps happening, this browser may be blocking notification APIs.");
     }
-
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    setPushEnabled(Boolean(subscription));
   };
 
   useEffect(() => {
@@ -553,7 +560,7 @@ export default function Settings() {
             {user?.email ? `Signed in as ${user.email}.` : "No account connected."}
           </div>
           <div style={statusTealBubble}>{syncStatus}</div>
-          <div style={{ ...sectionHint, marginTop: 8 }}>
+          <div style={{ ...helper, marginTop: 8 }}>
             Last cloud sync: {formatLastCloudSync(lastCloudSyncAt)}
           </div>
           {user && (
