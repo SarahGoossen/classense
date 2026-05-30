@@ -197,16 +197,6 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
   useEffect(() => {
     if (!loaded) return;
-    localStorage.setItem("plannerEvents", JSON.stringify(events));
-  }, [events, loaded]);
-
-  useEffect(() => {
-    if (!loaded) return;
-    localStorage.setItem("reminders", JSON.stringify(reminders));
-  }, [reminders, loaded]);
-
-  useEffect(() => {
-    if (!loaded) return;
 
     if (localStorage.getItem("openPlannerSection") === "scheduled") {
       window.setTimeout(() => {
