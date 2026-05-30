@@ -206,6 +206,18 @@ const wait = (ms: number) =>
     window.setTimeout(resolve, ms);
   });
 
+const withRequestTimeout = async <T,>(
+  promise: Promise<T>,
+  ms: number,
+  label: string
+) =>
+  Promise.race<T>([
+    promise,
+    new Promise<T>((_, reject) => {
+      window.setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    }),
+  ]);
+
 const toItemTimestamp = (item: Record<string, unknown>) => {
   const value =
     item.updatedAt ||
@@ -339,11 +351,15 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     async (userId: string): Promise<Snapshot | null> => {
       if (!supabase) return null;
 
-      const { data, error } = await supabase
-        .from("user_snapshots")
-        .select("payload")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { data, error } = await withRequestTimeout(
+        supabase
+          .from("user_snapshots")
+          .select("payload")
+          .eq("user_id", userId)
+          .maybeSingle(),
+        8000,
+        "Classense Cloud fetch"
+      );
 
       if (error || !data?.payload) {
         return null;
@@ -361,11 +377,15 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     async (userId: string, snapshot: Snapshot) => {
       if (!supabase) return;
 
-      const { error } = await supabase.from("user_snapshots").upsert({
-        user_id: userId,
-        payload: snapshot,
-        updated_at: new Date().toISOString(),
-      });
+      const { error } = await withRequestTimeout(
+        supabase.from("user_snapshots").upsert({
+          user_id: userId,
+          payload: snapshot,
+          updated_at: new Date().toISOString(),
+        }),
+        8000,
+        "Classense Cloud save"
+      );
 
       return error ? { error: error.message } : {};
     },
