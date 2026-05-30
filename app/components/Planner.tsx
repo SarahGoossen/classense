@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { calculateReminderTime } from "../utils/reminders";
 import { subscribeClassenseStorageSync } from "../utils/storageSync";
 import { useClassenseCloud } from "../context/ClassenseCloud";
+import { getSupabaseBrowserClient } from "../lib/supabase";
 
 type ReminderItem = {
   id: number;
@@ -89,7 +90,48 @@ const waitForCloudSave = (action: Promise<{ ok: boolean; error?: string }>) =>
     }),
   ]);
 
+const persistPlannerRemotely = async (
+  plannerEvents: unknown[],
+  reminders: unknown[],
+  getToken: () => Promise<string | null>,
+  fallback: () => Promise<{ ok: boolean; error?: string }>
+) => {
+  const token = await getToken();
+
+  if (!token) {
+    return fallback();
+  }
+
+  const response = await fetch("/api/planner/sync", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ plannerEvents, reminders }),
+  });
+
+  if (!response.ok) {
+    let errorMessage = "Could not save planner changes to Classense Cloud.";
+
+    try {
+      const data = await response.json();
+      errorMessage = String(data?.error || errorMessage);
+    } catch {
+      // Keep fallback error message.
+    }
+
+    return fallback().then((result) => ({
+      ok: result.ok,
+      error: result.ok ? errorMessage : result.error || errorMessage,
+    }));
+  }
+
+  return { ok: true };
+};
+
 export default function Planner({ setTab }: { setTab?: (tab: string) => void }) {
+  const supabase = getSupabaseBrowserClient();
   const { authReady, syncStatus, user, persistSnapshotNow } = useClassenseCloud();
   const scheduledEventsRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
@@ -293,10 +335,20 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setIsSaving(true);
     try {
       const syncResult = await waitForCloudSave(
-        persistSnapshotNow({
-          plannerEvents: nextEvents,
-          reminders: nextReminders,
-        })
+        persistPlannerRemotely(
+          nextEvents,
+          nextReminders,
+          async () => {
+            if (!supabase) return null;
+            const { data } = await supabase.auth.getSession();
+            return data.session?.access_token || null;
+          },
+          () =>
+            persistSnapshotNow({
+              plannerEvents: nextEvents,
+              reminders: nextReminders,
+            })
+        )
       );
       showMessage(
         syncResult.pending
@@ -327,10 +379,20 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setIsSaving(true);
     try {
       const syncResult = await waitForCloudSave(
-        persistSnapshotNow({
-          plannerEvents: nextEvents,
-          reminders: nextReminders,
-        })
+        persistPlannerRemotely(
+          nextEvents,
+          nextReminders,
+          async () => {
+            if (!supabase) return null;
+            const { data } = await supabase.auth.getSession();
+            return data.session?.access_token || null;
+          },
+          () =>
+            persistSnapshotNow({
+              plannerEvents: nextEvents,
+              reminders: nextReminders,
+            })
+        )
       );
       showMessage(
         syncResult.pending
@@ -416,9 +478,19 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setIsSaving(true);
     try {
       const syncResult = await waitForCloudSave(
-        persistSnapshotNow({
-          reminders: updated,
-        })
+        persistPlannerRemotely(
+          events,
+          updated,
+          async () => {
+            if (!supabase) return null;
+            const { data } = await supabase.auth.getSession();
+            return data.session?.access_token || null;
+          },
+          () =>
+            persistSnapshotNow({
+              reminders: updated,
+            })
+        )
       );
       showMessage(
         syncResult.pending
