@@ -28,6 +28,12 @@ type PlannerEvent = {
   updatedAt?: string;
 };
 
+type SyncResult = {
+  ok: boolean;
+  error?: string;
+  pending?: boolean;
+};
+
 const timeOptions = Array.from({ length: 48 }, (_value, index) => {
   const hours = String(Math.floor(index / 2)).padStart(2, "0");
   const minutes = index % 2 === 0 ? "00" : "30";
@@ -74,6 +80,14 @@ const formatLocalDateInputValue = (date: Date) => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+const waitForCloudSave = (action: Promise<{ ok: boolean; error?: string }>) =>
+  Promise.race<SyncResult>([
+    action,
+    new Promise<SyncResult>((resolve) => {
+      window.setTimeout(() => resolve({ ok: true, pending: true }), 12000);
+    }),
+  ]);
 
 export default function Planner({ setTab }: { setTab?: (tab: string) => void }) {
   const { authReady, syncStatus, user, persistSnapshotNow } = useClassenseCloud();
@@ -278,8 +292,14 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
     setIsSaving(true);
     try {
-      const syncResult = await persistSnapshotNow();
-      showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
+      const syncResult = await waitForCloudSave(persistSnapshotNow());
+      showMessage(
+        syncResult.pending
+          ? "Saved on this device. Still syncing to Classense Cloud..."
+          : syncResult.ok
+            ? "Saved ✓"
+            : "Saved on this device. Cloud sync failed."
+      );
       if (!syncResult.ok && syncResult.error) {
         console.error("Planner save failed:", syncResult.error);
       }
@@ -301,8 +321,14 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     localStorage.setItem("reminders", JSON.stringify(nextReminders));
     setIsSaving(true);
     try {
-      const syncResult = await persistSnapshotNow();
-      showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+      const syncResult = await waitForCloudSave(persistSnapshotNow());
+      showMessage(
+        syncResult.pending
+          ? "Deleted on this device. Still syncing to Classense Cloud..."
+          : syncResult.ok
+            ? "Deleted ✓"
+            : "Deleted on this device. Cloud sync failed."
+      );
       if (!syncResult.ok && syncResult.error) {
         console.error("Planner delete failed:", syncResult.error);
       }
@@ -379,8 +405,14 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     localStorage.setItem("reminders", JSON.stringify(updated));
     setIsSaving(true);
     try {
-      const syncResult = await persistSnapshotNow();
-      showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+      const syncResult = await waitForCloudSave(persistSnapshotNow());
+      showMessage(
+        syncResult.pending
+          ? "Deleted on this device. Still syncing to Classense Cloud..."
+          : syncResult.ok
+            ? "Deleted ✓"
+            : "Deleted on this device. Cloud sync failed."
+      );
       if (!syncResult.ok && syncResult.error) {
         console.error("Reminder delete failed:", syncResult.error);
       }
