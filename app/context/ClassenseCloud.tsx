@@ -405,7 +405,16 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     }
 
     setSyncStatus("Saving to Classense Cloud...");
-    const result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
+    let result: { error?: string } | undefined;
+
+    try {
+      result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not reach Classense Cloud.";
+      setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+      return { ok: false, error: message };
+    }
 
     if (result?.error) {
       setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
@@ -429,7 +438,15 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
 
     uploadTimerRef.current = window.setTimeout(async () => {
       setSyncStatus("Saving to Classense Cloud...");
-      const result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
+      let result: { error?: string } | undefined;
+
+      try {
+        result = await pushRemoteSnapshotWithRetry(user.id, readLocalSnapshot());
+      } catch {
+        setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
+        return;
+      }
+
       if (result?.error) {
         setSyncStatus("Cloud sync failed. Your latest changes are still on this device.");
         return;

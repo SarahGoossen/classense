@@ -14,6 +14,18 @@ type ReminderItem = {
   classTime: string;
   remindAt: string;
   type: string;
+  updatedAt?: string;
+};
+
+type PlannerEvent = {
+  id: number;
+  date: string;
+  className: string;
+  time: string;
+  notes: string;
+  reminderEnabled?: boolean;
+  reminderOffset?: string;
+  updatedAt?: string;
 };
 
 const timeOptions = Array.from({ length: 48 }, (_value, index) => {
@@ -64,7 +76,7 @@ const formatLocalDateInputValue = (date: Date) => {
 };
 
 export default function Planner({ setTab }: { setTab?: (tab: string) => void }) {
-  const { persistSnapshotNow } = useClassenseCloud();
+  const { authReady, syncStatus, user, persistSnapshotNow } = useClassenseCloud();
   const scheduledEventsRef = useRef<HTMLDivElement | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [date, setDate] = useState("");
@@ -82,6 +94,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   const showMessage = (text: string) => {
     setMessage(text);
@@ -104,6 +117,11 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     const unsubscribeSync = subscribeClassenseStorageSync(loadPlannerData);
     return () => unsubscribeSync();
   }, []);
+
+  useEffect(() => {
+    if (!authReady) return;
+    loadPlannerData();
+  }, [authReady, syncStatus, user]);
 
   useEffect(() => {
     const updateViewport = () => setIsMobile(window.innerWidth <= 640);
@@ -152,6 +170,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
           classTime: reminderTime,
           remindAt,
           type: "event",
+          updatedAt: new Date().toISOString(),
         },
       ];
     });
@@ -162,11 +181,15 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
   };
 
   const handleAdd = async () => {
-    if (!date || (!selectedClass && !eventTitle.trim())) return;
+    if (!date || (!selectedClass && !eventTitle.trim())) {
+      showMessage("Add a date and event title before saving.");
+      return;
+    }
 
     const eventName = selectedClass || eventTitle.trim();
-    let nextEvents = events;
+    let nextEvents = events as PlannerEvent[];
     let nextReminders = reminders;
+    const updatedAt = new Date().toISOString();
 
     if (editingId) {
       const nextEvent = {
@@ -177,6 +200,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         notes,
         reminderEnabled: enableEventReminder,
         reminderOffset: eventReminderTime,
+        updatedAt,
       };
 
       nextEvents = events.map((e) => (e.id === editingId ? nextEvent : e));
@@ -197,6 +221,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             classTime: time,
             remindAt,
             type: "event",
+            updatedAt,
           },
         ];
       } else {
@@ -213,6 +238,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         notes,
         reminderEnabled: enableEventReminder,
         reminderOffset: eventReminderTime,
+        updatedAt,
       };
       nextEvents = [newEvent, ...events];
 
@@ -232,6 +258,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             classTime: time,
             remindAt,
             type: "event",
+            updatedAt,
           },
         ];
       }
@@ -249,8 +276,19 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setEnableEventReminder(false);
     setEventReminderTime("2h");
 
-    const syncResult = await persistSnapshotNow();
-    showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
+    setIsSaving(true);
+    try {
+      const syncResult = await persistSnapshotNow();
+      showMessage(syncResult.ok ? "Saved ✓" : "Saved on this device. Cloud sync failed.");
+      if (!syncResult.ok && syncResult.error) {
+        console.error("Planner save failed:", syncResult.error);
+      }
+    } catch (error) {
+      console.error("Planner save threw:", error);
+      showMessage("We couldn't save that event. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = async (id) => {
@@ -261,8 +299,19 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setReminders(nextReminders);
     localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
     localStorage.setItem("reminders", JSON.stringify(nextReminders));
-    const syncResult = await persistSnapshotNow();
-    showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+    setIsSaving(true);
+    try {
+      const syncResult = await persistSnapshotNow();
+      showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+      if (!syncResult.ok && syncResult.error) {
+        console.error("Planner delete failed:", syncResult.error);
+      }
+    } catch (error) {
+      console.error("Planner delete threw:", error);
+      showMessage("We couldn't delete that event. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEdit = (event) => {
@@ -328,8 +377,19 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     const updated = reminders.filter((item) => item.id !== id);
     setReminders(updated);
     localStorage.setItem("reminders", JSON.stringify(updated));
-    const syncResult = await persistSnapshotNow();
-    showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+    setIsSaving(true);
+    try {
+      const syncResult = await persistSnapshotNow();
+      showMessage(syncResult.ok ? "Deleted ✓" : "Deleted on this device. Cloud sync failed.");
+      if (!syncResult.ok && syncResult.error) {
+        console.error("Reminder delete failed:", syncResult.error);
+      }
+    } catch (error) {
+      console.error("Reminder delete threw:", error);
+      showMessage("We couldn't delete that reminder. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditReminder = (reminder: ReminderItem) => {
@@ -463,6 +523,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
         <button
           onClick={handleAdd}
           style={btn}
+          disabled={isSaving}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = "translateY(-2px) scale(1.02)";
             e.currentTarget.style.boxShadow = "0 10px 24px rgba(37,99,235,0.35)";
@@ -472,7 +533,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             e.currentTarget.style.boxShadow = "var(--shadow-soft)";
           }}
         >
-          {editingId ? "Update Event" : "Add to Planner"}
+          {isSaving ? "Saving..." : editingId ? "Update Event" : "Add to Planner"}
         </button>
 
         {message ? (
