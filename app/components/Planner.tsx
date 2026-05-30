@@ -241,7 +241,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
       return;
     }
 
-    const eventName = selectedClass || eventTitle.trim();
+    const eventName = eventTitle.trim() || selectedClass;
     let nextEvents = events as PlannerEvent[];
     let nextReminders = reminders;
     const updatedAt = new Date().toISOString();
@@ -413,7 +413,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     setDate(event.date);
     const matchedClass = classes.find((c) => (c.name || c) === event.className);
     setSelectedClass(matchedClass ? event.className : "");
-    setEventTitle(matchedClass ? "" : event.className);
+    setEventTitle(event.className || "");
     setTime(event.time);
     setNotes(event.notes);
     setEnableEventReminder(Boolean(event.reminderEnabled));
@@ -554,7 +554,17 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
           </Box>
 
           <Box label="Class" fullWidth>
-            <select value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)} style={inputInner}>
+            <select
+              value={selectedClass}
+              onChange={(e) => {
+                const value = e.target.value;
+                setSelectedClass(value);
+                if (value) {
+                  setEventTitle(value);
+                }
+              }}
+              style={inputInner}
+            >
               <option value="">No linked class</option>
               {classes.map((c, i) => (
                 <option key={i} value={c.name || c}>
