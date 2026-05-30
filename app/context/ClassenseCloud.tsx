@@ -81,6 +81,7 @@ const SNAPSHOT_KEYS = [
 const LOCAL_LOG_BACKUP_KEY = "classense_logs_local_backup";
 const LOCAL_DIRTY_KEY = "classense_pending_cloud_sync";
 const LAST_CLOUD_SYNC_KEY = "classense_last_cloud_sync_at";
+const SKIP_AUTO_SYNC_FLAG = "__CLASSENSE_SKIP_AUTO_SYNC__";
 
 const emptySnapshot = (): Snapshot => ({
   app_name: "",
@@ -120,6 +121,18 @@ const readLastCloudSyncAt = () => {
 const writeLastCloudSyncAt = (value: string) => {
   if (typeof window === "undefined") return;
   localStorage.setItem(LAST_CLOUD_SYNC_KEY, value);
+};
+
+const shouldSkipAutoSyncForKey = (key: string) => {
+  if (typeof window === "undefined") return false;
+  const skipFlag = (window as Window & { [SKIP_AUTO_SYNC_FLAG]?: string | null })[
+    SKIP_AUTO_SYNC_FLAG
+  ];
+
+  return (
+    skipFlag === key ||
+    (skipFlag === "planner-sync" && (key === "plannerEvents" || key === "reminders"))
+  );
 };
 
 const clearStoredAuthSession = () => {
@@ -624,24 +637,28 @@ export function ClassenseCloudProvider({ children }: { children: ReactNode }) {
     Storage.prototype.setItem = function patchedSetItem(key, value) {
       originalSetItem.call(this, key, value);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
-        if (!applyingRemoteRef.current) {
+        if (!applyingRemoteRef.current && !shouldSkipAutoSyncForKey(key)) {
           localDirtyRef.current = true;
           markLocalDirty();
         }
         emitClassenseStorageSync();
-        scheduleUpload();
+        if (!shouldSkipAutoSyncForKey(key)) {
+          scheduleUpload();
+        }
       }
     };
 
     Storage.prototype.removeItem = function patchedRemoveItem(key) {
       originalRemoveItem.call(this, key);
       if (this === window.localStorage && STORAGE_KEYS.includes(key as (typeof STORAGE_KEYS)[number])) {
-        if (!applyingRemoteRef.current) {
+        if (!applyingRemoteRef.current && !shouldSkipAutoSyncForKey(key)) {
           localDirtyRef.current = true;
           markLocalDirty();
         }
         emitClassenseStorageSync();
-        scheduleUpload();
+        if (!shouldSkipAutoSyncForKey(key)) {
+          scheduleUpload();
+        }
       }
     };
 

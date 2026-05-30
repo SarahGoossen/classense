@@ -90,6 +90,19 @@ const waitForCloudSave = (action: Promise<{ ok: boolean; error?: string }>) =>
     }),
   ]);
 
+const withPlannerLocalWrite = (callback: () => void) => {
+  const win = window as Window & { __CLASSENSE_SKIP_AUTO_SYNC__?: string | null };
+
+  try {
+    win.__CLASSENSE_SKIP_AUTO_SYNC__ = "planner-sync";
+    callback();
+  } finally {
+    window.setTimeout(() => {
+      win.__CLASSENSE_SKIP_AUTO_SYNC__ = null;
+    }, 0);
+  }
+};
+
 const persistPlannerRemotely = async (
   plannerEvents: unknown[],
   reminders: unknown[],
@@ -322,8 +335,10 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
 
     setEvents(nextEvents);
     setReminders(nextReminders);
-    localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
-    localStorage.setItem("reminders", JSON.stringify(nextReminders));
+    withPlannerLocalWrite(() => {
+      localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
+      localStorage.setItem("reminders", JSON.stringify(nextReminders));
+    });
 
     setSelectedClass("");
     setEventTitle("");
@@ -374,8 +389,10 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     const nextReminders = reminders.filter((item) => item.eventId !== id);
     setEvents(nextEvents);
     setReminders(nextReminders);
-    localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
-    localStorage.setItem("reminders", JSON.stringify(nextReminders));
+    withPlannerLocalWrite(() => {
+      localStorage.setItem("plannerEvents", JSON.stringify(nextEvents));
+      localStorage.setItem("reminders", JSON.stringify(nextReminders));
+    });
     setIsSaving(true);
     try {
       const syncResult = await waitForCloudSave(
@@ -474,7 +491,9 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
     if (!window.confirm("Delete this reminder?")) return;
     const updated = reminders.filter((item) => item.id !== id);
     setReminders(updated);
-    localStorage.setItem("reminders", JSON.stringify(updated));
+    withPlannerLocalWrite(() => {
+      localStorage.setItem("reminders", JSON.stringify(updated));
+    });
     setIsSaving(true);
     try {
       const syncResult = await waitForCloudSave(
