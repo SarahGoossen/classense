@@ -557,11 +557,7 @@ export default function Planner({ setTab }: { setTab?: (tab: string) => void }) 
             <select
               value={selectedClass}
               onChange={(e) => {
-                const value = e.target.value;
-                setSelectedClass(value);
-                if (value) {
-                  setEventTitle(value);
-                }
+                setSelectedClass(e.target.value);
               }}
               style={inputInner}
             >
